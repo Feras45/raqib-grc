@@ -22,6 +22,11 @@ const SOFT_DEADLINE_MS = 9500;
 // to the model, so catalog building runs from model knowledge by default. Flip to true once your
 // Anthropic account is on a higher rate tier if you want live version verification.
 const CATALOG_SEARCH = false;
+// Catalog structure is simple; generate it on a faster model so a whole domain's JSON
+// finishes inside Hobby's 10s limit (Sonnet's slower token output was the real timeout cause)
+// and at a fraction of the cost. Advisor + evidence stay on Sonnet. If this model string ever
+// 404s, check the current Haiku id at docs.claude.com and update here.
+const CATALOG_MODEL = "claude-haiku-4-5-20251001";
 function withDeadline(promise, ms) {
   let timer;
   const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("timeout")), ms); });
@@ -39,7 +44,7 @@ export default route({
       if (!FRAMEWORKS[fw]) throw httpError(400, "Unknown framework");
       let meta = null;
       try {
-        meta = normalizeMeta(parseLooseJSON(await withDeadline(callClaude({ search: CATALOG_SEARCH, maxTokens: 800, messages: [{ role: "user", content: metaPrompt(fw) }] }), SOFT_DEADLINE_MS)), fw);
+        meta = normalizeMeta(parseLooseJSON(await withDeadline(callClaude({ model: CATALOG_MODEL, search: CATALOG_SEARCH, maxTokens: 800, messages: [{ role: "user", content: metaPrompt(fw) }] }), SOFT_DEADLINE_MS)), fw);
       } catch { meta = null; }
       if (!meta) meta = { version: FRAMEWORKS[fw].fallbackVersion, domains: FRAMEWORKS[fw].fallbackDomains, source: "verified fallback" };
       return send(res, 200, { meta });
@@ -51,8 +56,8 @@ export default route({
       let parsed = null, lastErr = null;
       try {
         // web search only on an explicit retry from the frontend (slower, used after a plain miss)
-        // model knowledge only (web search disabled above); retry is a fresh attempt, not a search escalation
-        parsed = parseLooseJSON(await withDeadline(callClaude({ search: CATALOG_SEARCH, maxTokens: 1500, messages: [{ role: "user", content: catalogPrompt(fw, domain, version) }] }), SOFT_DEADLINE_MS));
+        // fast model (Haiku) so a full domain's JSON returns inside the 10s limit; web search disabled above
+        parsed = parseLooseJSON(await withDeadline(callClaude({ model: CATALOG_MODEL, search: CATALOG_SEARCH, maxTokens: 1500, messages: [{ role: "user", content: catalogPrompt(fw, domain, version) }] }), SOFT_DEADLINE_MS));
       } catch (e) { lastErr = e; }
       if (!parsed || !Array.isArray(parsed.subdomains)) throw httpError(502, `${FRAMEWORKS[fw].short} D${domain.n}: ${(lastErr && lastErr.message) || "bad shape"}`);
       return send(res, 200, { domain: normalizeDomain(parsed, domain) });

@@ -5,8 +5,8 @@ import { httpError } from "./http.js";
 const MODEL = "claude-sonnet-4-6";
 const KEY = () => { if (!process.env.ANTHROPIC_API_KEY) throw httpError(500, "ANTHROPIC_API_KEY not set"); return process.env.ANTHROPIC_API_KEY; };
 
-export async function callClaude({ messages, system, maxTokens = 1000, search = false }) {
-  const body = { model: MODEL, max_tokens: maxTokens, system: system || "", messages };
+export async function callClaude({ messages, system, maxTokens = 1000, search = false, model = MODEL }) {
+  const body = { model, max_tokens: maxTokens, system: system || "", messages };
   if (search) body.tools = [{ type: "web_search_20250305", name: "web_search" }];
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
