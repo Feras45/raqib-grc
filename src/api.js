@@ -20,24 +20,24 @@ async function req(method, url, body) {
 }
 
 export const api = {
-  // auth
-  status: () => req("GET", "/api/auth/status"),
-  me: () => req("GET", "/api/auth/me"),
-  bootstrap: (p) => req("POST", "/api/auth/bootstrap", p),
-  login: (email, password) => req("POST", "/api/auth/login", { email, password }),
-  logout: () => req("POST", "/api/auth/logout"),
+  // auth (all routed through one function: /api/auth?action=...)
+  status: () => req("GET", "/api/auth?action=status"),
+  me: () => req("GET", "/api/auth?action=me"),
+  bootstrap: (p) => req("POST", "/api/auth?action=bootstrap", p),
+  login: (email, password) => req("POST", "/api/auth?action=login", { email, password }),
+  logout: () => req("POST", "/api/auth?action=logout"),
   // mfa
-  mfaVerify: (challenge, code) => req("POST", "/api/auth/mfa?action=verify", { challenge, code }),
-  mfaSetup: () => req("POST", "/api/auth/mfa?action=setup"),
-  mfaEnable: (code) => req("POST", "/api/auth/mfa?action=enable", { code }),
-  mfaDisable: (password) => req("POST", "/api/auth/mfa?action=disable", { password }),
+  mfaVerify: (challenge, code) => req("POST", "/api/auth?action=mfa-verify", { challenge, code }),
+  mfaSetup: () => req("POST", "/api/auth?action=mfa-setup"),
+  mfaEnable: (code) => req("POST", "/api/auth?action=mfa-enable", { code }),
+  mfaDisable: (password) => req("POST", "/api/auth?action=mfa-disable", { password }),
   // workspace + data
   workspace: () => req("GET", "/api/workspace"),
   saveSettings: (frameworks, org, lang) => req("POST", "/api/settings", { frameworks, org, lang }),
   resetAll: () => req("DELETE", "/api/settings"),
   // catalogs (phased so each call is short)
   catalogMeta: (fw) => req("POST", "/api/catalogs?phase=meta", { fw }),
-  catalogDomain: (fw, domain, version) => req("POST", "/api/catalogs?phase=domain", { fw, domain, version }),
+  catalogDomain: (fw, domain, version, retry) => req("POST", "/api/catalogs?phase=domain", { fw, domain, version, retry: !!retry }),
   catalogSave: (fw, catalog) => req("POST", "/api/catalogs?phase=save", { fw, catalog }),
   // assessments / approvals
   applyAssessments: (items) => req("POST", "/api/assessments", { items }),

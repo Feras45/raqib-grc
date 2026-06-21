@@ -827,8 +827,14 @@ async function fetchCatalogs(frameworks, existing, force, onTick) {
   let done = 0;
   const errors = [];
   await runPool(jobs.map(({ f, d }) => async () => {
-    try { const { domain } = await api.catalogDomain(f, d, metas[f].version); result[f].domains.push(domain); }
-    catch (e) { errors.push(e.message); }
+    let domain = null, lastErr = null;
+    try { ({ domain } = await api.catalogDomain(f, d, metas[f].version, false)); }
+    catch (e) { lastErr = e; }
+    if (!domain) {
+      try { ({ domain } = await api.catalogDomain(f, d, metas[f].version, true)); } // retry as its own short invocation, now with web search
+      catch (e) { lastErr = e; }
+    }
+    if (domain) result[f].domains.push(domain); else errors.push(lastErr?.message || `${FRAMEWORKS[f].short} D${d.n}: failed`);
     done++;
     onTick("domains", done, jobs.length, `${FRAMEWORKS[f].short} ${metas[f].version} · ${d.en}`);
   }), 3);

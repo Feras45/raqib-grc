@@ -1,10 +1,17 @@
 // GET list · POST ?action=analyze (upload→AI→link→store) · DELETE remove
+// analyze is a single model call, capped under Vercel Hobby's 10s hard limit.
 import { route, readJson, send, requireUser, requirePerm, httpError } from "./_lib/http.js";
 import { listEvidence, insertEvidence, deleteEvidence } from "./_lib/db.js";
 import { analyzeEvidence } from "./_lib/anthropic.js";
 import { loadContext } from "./_lib/context.js";
 
 const KINDS = { pdf: 1, image: 1, text: 1 };
+const SOFT_DEADLINE_MS = 8000;
+function withDeadline(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Analysis is taking too long. Try again.")), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 export default route({
   GET: async (req, res) => { await requireUser(req); send(res, 200, { evidence: await listEvidence() }); },
@@ -16,7 +23,7 @@ export default route({
     if ((file.size || 0) > 4 * 1024 * 1024) throw httpError(413, "File too large (max 4 MB)");
     const { selected, versions, validKeysByFw } = await loadContext();
     if (!selected.length) throw httpError(400, "Load catalogs first");
-    const ev = await analyzeEvidence({ file, selected, versions, validKeysByFw, userName: user.name });
+    const ev = await withDeadline(analyzeEvidence({ file, selected, versions, validKeysByFw, userName: user.name }), SOFT_DEADLINE_MS);
     await insertEvidence(ev);
     send(res, 201, { evidence: ev });
   },
