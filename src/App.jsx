@@ -851,7 +851,8 @@ async function fetchCatalogs(frameworks, existing, force, onTick) {
   // Serial (concurrency 1) so a low-tier account is fed a trickle, not a burst.
   let done = 0;
   const errors = [];
-  for (const { f, d } of jobs) {
+  for (let i = 0; i < jobs.length; i++) {
+    const { f, d } = jobs[i];
     try {
       const { domain } = await callWithBackoff(
         (attempt) => api.catalogDomain(f, d, metas[f].version, attempt > 0), // web search only after first miss
@@ -864,6 +865,7 @@ async function fetchCatalogs(frameworks, existing, force, onTick) {
     }
     done++;
     onTick("domains", done, jobs.length, `${FRAMEWORKS[f].short} ${metas[f].version} · ${d.en}`);
+    if (i < jobs.length - 1) await sleep(1200); // spacer: stay under low requests-per-minute caps
   }
 
   // Persist only frameworks that completed in full, so a retry skips them and
