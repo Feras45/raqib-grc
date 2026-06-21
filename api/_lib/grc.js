@@ -448,8 +448,8 @@ function parseLooseJSON(text) {
 
 function metaPrompt(fwKey) {
   const fw = FRAMEWORKS[fwKey];
-  return `Use web search to verify, from the official source ${fw.officialSource}, the CURRENT published version of the ${fw.regulator} "${fw.name}" (${fw.short}) and its main domain structure as of today. Do not rely on memory for the version number.
-Then respond with ONLY minified JSON, no prose, no citations, no markdown, schema:
+  return `State the official published version designation of the ${fw.regulator} "${fw.name}" (${fw.short}) and its main domain structure, per the official source ${fw.officialSource}.
+Respond with ONLY minified JSON, no prose, no citations, no markdown, schema:
 {"version":"official version designation, e.g. ECC-2:2024","domains":[{"n":1,"en":"domain name","ar":"الاسم الرسمي بالعربية"}]}
 List ALL main domains in official order.`;
 }
@@ -458,7 +458,7 @@ function catalogPrompt(fwKey, domain, version) {
   const fw = FRAMEWORKS[fwKey];
   const idHint = fwKey === "ncaecc" ? `${domain.n}-1` : `3.${domain.n}.1`;
   const cidHint = fwKey === "ncaecc" ? `${domain.n}-1-1` : `3.${domain.n}.1.a`;
-  return `You are an expert on ${fw.regulator} ${fw.short} ${version}. Use web search against ${fw.officialSource} if needed to confirm the official structure of Main Domain ${domain.n} ("${domain.en}") in ${version} — subdomains and controls with official numbering.
+  return `You are an expert on ${fw.regulator} ${fw.short} ${version}, per the official source ${fw.officialSource}. Give the official structure of Main Domain ${domain.n} ("${domain.en}") in ${version}: its subdomains and controls with official numbering.
 Respond with ONLY minified JSON, no prose, no citations, no markdown, schema:
 {"subdomains":[{"id":"${idHint}","en":"subdomain name","ar":"الاسم الرسمي بالعربية","controls":[{"id":"${cidHint}","t":"control title, max 9 words"}]}]}
 Cover ALL subdomains of this domain in ${version}. Keep output under 900 tokens; compress titles if needed.`;

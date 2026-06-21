@@ -16,6 +16,11 @@ async function requireScopeRole(req) {
 
 // Race the model call against a soft deadline so we always respond before Vercel's hard limit.
 const SOFT_DEADLINE_MS = 8000;
+// Web search is the dominant token cost here (it injects search results into the prompt) and the
+// main source of 429s and timeouts. The NCA ECC / SAMA CSF control structures are stable and known
+// to the model, so catalog building runs from model knowledge by default. Flip to true once your
+// Anthropic account is on a higher rate tier if you want live version verification.
+const CATALOG_SEARCH = false;
 function withDeadline(promise, ms) {
   let timer;
   const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("timeout")), ms); });
@@ -33,7 +38,7 @@ export default route({
       if (!FRAMEWORKS[fw]) throw httpError(400, "Unknown framework");
       let meta = null;
       try {
-        meta = normalizeMeta(parseLooseJSON(await withDeadline(callClaude({ search: true, messages: [{ role: "user", content: metaPrompt(fw) }] }), SOFT_DEADLINE_MS)), fw);
+        meta = normalizeMeta(parseLooseJSON(await withDeadline(callClaude({ search: CATALOG_SEARCH, maxTokens: 800, messages: [{ role: "user", content: metaPrompt(fw) }] }), SOFT_DEADLINE_MS)), fw);
       } catch { meta = null; }
       if (!meta) meta = { version: FRAMEWORKS[fw].fallbackVersion, domains: FRAMEWORKS[fw].fallbackDomains, source: "verified fallback" };
       return send(res, 200, { meta });
@@ -45,7 +50,8 @@ export default route({
       let parsed = null, lastErr = null;
       try {
         // web search only on an explicit retry from the frontend (slower, used after a plain miss)
-        parsed = parseLooseJSON(await withDeadline(callClaude({ search: !!retry, messages: [{ role: "user", content: catalogPrompt(fw, domain, version) }] }), SOFT_DEADLINE_MS));
+        // model knowledge only (web search disabled above); retry is a fresh attempt, not a search escalation
+        parsed = parseLooseJSON(await withDeadline(callClaude({ search: CATALOG_SEARCH, maxTokens: 1500, messages: [{ role: "user", content: catalogPrompt(fw, domain, version) }] }), SOFT_DEADLINE_MS));
       } catch (e) { lastErr = e; }
       if (!parsed || !Array.isArray(parsed.subdomains)) throw httpError(502, `${FRAMEWORKS[fw].short} D${domain.n}: ${(lastErr && lastErr.message) || "bad shape"}`);
       return send(res, 200, { domain: normalizeDomain(parsed, domain) });

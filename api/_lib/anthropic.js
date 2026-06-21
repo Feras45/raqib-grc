@@ -32,7 +32,7 @@ export async function fetchCatalogs(frameworks, force, existing = {}) {
   await runPool(targets.map((f) => async () => {
     let meta = null;
     for (let a = 0; a < 2 && !meta; a++) {
-      try { meta = normalizeMeta(parseLooseJSON(await callClaude({ search: true, messages: [{ role: "user", content: metaPrompt(f) }] })), f); } catch { meta = null; }
+      try { meta = normalizeMeta(parseLooseJSON(await callClaude({ search: false, messages: [{ role: "user", content: metaPrompt(f) }] })), f); } catch { meta = null; }
     }
     metas[f] = meta || { version: FRAMEWORKS[f].fallbackVersion, domains: FRAMEWORKS[f].fallbackDomains, source: "verified fallback" };
   }), 2);
@@ -43,7 +43,7 @@ export async function fetchCatalogs(frameworks, force, existing = {}) {
   await runPool(jobs.map(({ f, d }) => async () => {
     let parsed = null, lastErr = null;
     for (let a = 0; a < 2 && !parsed; a++) {
-      try { parsed = parseLooseJSON(await callClaude({ search: a > 0, messages: [{ role: "user", content: catalogPrompt(f, d, metas[f].version) }] })); } catch (e) { lastErr = e; }
+      try { parsed = parseLooseJSON(await callClaude({ search: false, messages: [{ role: "user", content: catalogPrompt(f, d, metas[f].version) }] })); } catch (e) { lastErr = e; }
     }
     if (!parsed || !Array.isArray(parsed.subdomains)) errors.push(`${FRAMEWORKS[f].short} D${d.n}: ${(lastErr && lastErr.message) || "bad shape"}`);
     else result[f].domains.push(normalizeDomain(parsed, d));

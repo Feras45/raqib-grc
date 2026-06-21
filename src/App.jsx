@@ -809,39 +809,77 @@ async function fetchCatalogs(frameworks, existing, force, onTick) {
   for (const f of frameworks) if (!targets.includes(f) && existing[f]) result[f] = existing[f];
   if (!targets.length) return { catalogs: result, notes };
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // One model call with bounded retries. Backs off on 429 (rate limit) and timeout,
+  // which is what low-tier Anthropic accounts hit during the catalog burst.
+  const callWithBackoff = async (fn, label, onWait) => {
+    let lastErr = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try { return await fn(attempt); }
+      catch (e) {
+        lastErr = e;
+        const transient = e.status === 429 || /timeout|429|too long/i.test(e.message || "");
+        if (!transient || attempt === 3) break;
+        const wait = Math.round(2000 * 2 ** attempt + Math.random() * 800); // 2s, 4s, 8s (+jitter)
+        if (onWait) onWait(label, wait);
+        await sleep(wait);
+      }
+    }
+    throw lastErr;
+  };
+
   const metas = {};
   let step = 0;
-  await runPool(targets.map((f) => async () => {
-    const { meta } = await api.catalogMeta(f);
+  for (const f of targets) {
+    const { meta } = await callWithBackoff(
+      () => api.catalogMeta(f),
+      `${FRAMEWORKS[f].short} version`,
+      (lbl, ms) => onTick("discover", step, targets.length, `rate limited · retrying ${lbl} in ${Math.round(ms / 1000)}s`),
+    );
     if (meta.source === "verified fallback") notes.push({ fw: f, version: meta.version });
     metas[f] = meta;
     step++;
     onTick("discover", step, targets.length, `${FRAMEWORKS[f].short} → ${meta.version}`);
-  }), 2);
+  }
 
   const jobs = [];
   for (const f of targets) {
     result[f] = { fetchedAt: Date.now(), version: metas[f].version, source: metas[f].source, domains: [] };
     for (const d of metas[f].domains) jobs.push({ f, d });
   }
+
+  // Serial (concurrency 1) so a low-tier account is fed a trickle, not a burst.
   let done = 0;
   const errors = [];
-  await runPool(jobs.map(({ f, d }) => async () => {
-    let domain = null, lastErr = null;
-    try { ({ domain } = await api.catalogDomain(f, d, metas[f].version, false)); }
-    catch (e) { lastErr = e; }
-    if (!domain) {
-      try { ({ domain } = await api.catalogDomain(f, d, metas[f].version, true)); } // retry as its own short invocation, now with web search
-      catch (e) { lastErr = e; }
+  for (const { f, d } of jobs) {
+    try {
+      const { domain } = await callWithBackoff(
+        (attempt) => api.catalogDomain(f, d, metas[f].version, attempt > 0), // web search only after first miss
+        `${FRAMEWORKS[f].short} D${d.n}`,
+        (lbl, ms) => onTick("domains", done, jobs.length, `rate limited · retrying ${lbl} in ${Math.round(ms / 1000)}s`),
+      );
+      result[f].domains.push(domain);
+    } catch (e) {
+      errors.push(e?.message || `${FRAMEWORKS[f].short} D${d.n}: failed`);
     }
-    if (domain) result[f].domains.push(domain); else errors.push(lastErr?.message || `${FRAMEWORKS[f].short} D${d.n}: failed`);
     done++;
     onTick("domains", done, jobs.length, `${FRAMEWORKS[f].short} ${metas[f].version} · ${d.en}`);
-  }), 3);
+  }
 
-  if (errors.length) throw new Error(errors.join(" | "));
-  for (const f of targets) { result[f].domains.sort((a, b) => a.n - b.n); await api.catalogSave(f, result[f]); }
-  return { catalogs: result, notes };
+  // Persist only frameworks that completed in full, so a retry skips them and
+  // re-fetches only the ones still missing. Incomplete frameworks are not saved
+  // and not returned, so they remain targets on the next attempt.
+  const completed = {};
+  for (const f of targets) {
+    result[f].domains.sort((a, b) => a.n - b.n);
+    const expected = metas[f].domains.length;
+    if (expected > 0 && result[f].domains.length === expected) {
+      try { await api.catalogSave(f, result[f]); completed[f] = result[f]; }
+      catch (e) { errors.push(`${FRAMEWORKS[f].short}: save failed (${e.message})`); }
+    }
+  }
+  for (const f of frameworks) if (!targets.includes(f) && existing[f]) completed[f] = existing[f];
+  return { catalogs: completed, notes, errors };
 }
 
 /* ── Export ── */
@@ -3123,11 +3161,12 @@ export default function App() {
   async function loadCatalogs(frameworks, existing = {}, force = false) {
     setPhase("loading"); setLoadError(null);
     try {
-      const { catalogs: cats } = await fetchCatalogs(frameworks, existing, force, (kind, done, total, label) => {
+      const { catalogs: cats, errors } = await fetchCatalogs(frameworks, existing, force, (kind, done, total, label) => {
         const pct = kind === "discover" ? Math.round((done / total) * 18) : 18 + Math.round((done / total) * 82);
         setProgress({ kind, done, total, label, pct });
       });
-      setCatalogs((prev) => ({ ...prev, ...cats }));
+      setCatalogs((prev) => ({ ...prev, ...cats })); // keep frameworks that completed
+      if (errors && errors.length) { setLoadError(errors.join(" | ")); return; } // stay on loader; retry fills the gaps
       setPhase("ready");
       toast(tt(lang, "toastCat"));
     } catch (e) { setLoadError(e.message); }

@@ -167,7 +167,7 @@ t('reportHTML: smoke en + rtl ar', ()=>{
 });
 
 /* ── prompts ── */
-t('prompts: meta forbids memory, demands JSON', ()=>{ const p=B.metaPrompt('ncaecc'); if(!p.includes('nca.gov.sa')||!p.includes('Do not rely on memory')) throw new Error('meta'); });
+t('prompts: meta cites official source, demands JSON', ()=>{ const p=B.metaPrompt('ncaecc'); if(!p.includes('nca.gov.sa')||!p.includes('minified JSON')||!p.includes('version')) throw new Error('meta'); });
 t('prompts: catalog carries version + domain', ()=>{ const p=B.catalogPrompt('samacsf',{n:3,en:'Ops'},'v1.0 (May 2017)'); if(!p.includes('v1.0 (May 2017)')||!p.includes('rulebook.sama.gov.sa')) throw new Error('cat'); });
 t('prompts: evidence schema + scope', ()=>{ const p=B.evidencePrompt(['ncaecc','samacsf'],{ncaecc:'ECC-2:2024',samacsf:'v1.0'}); if(!p.includes('control_ids')||!p.includes('ECC-2:2024')||!p.includes('strong|adequate|weak')) throw new Error('ev'); });
 
