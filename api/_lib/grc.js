@@ -52,7 +52,7 @@ const STR = {
     gapsOf: "{g} gaps / {n} controls",
     heatTags: ["Critical exposure", "Elevated", "Managed", "Controlled"],
     advTitle: "Ask, or attach evidence",
-    advEmpty: "Ask for implementation guidance, acceptable evidence, gap remediation plans, or NCA↔SAMA mapping — in English or Arabic; replies follow your language. Attach a PDF, image, or text file and Raqib will analyze it as evidence, link it to matching controls, and surface it on the dashboard.",
+    advEmpty: "Ask for implementation guidance, acceptable evidence, gap remediation plans, or NCA↔SAMA mapping — in English or Arabic; replies follow your language. Attach a PDF, image, or text file and Burhan will analyze it as evidence, link it to matching controls, and surface it on the dashboard.",
     advSuggestions: [
       "Evidence checklist for identity & access management",
       "ما الأدلة المطلوبة لإثبات الالتزام بضوابط النسخ الاحتياطي؟",
@@ -123,7 +123,7 @@ const STR = {
     nav: { dash: "Dashboard", controls: "Controls", risk: "Risk", evidence: "Evidence", approvals: "Approvals", advisor: "Advisor", users: "Users", settings: "Settings" },
     roles: { admin: "Administrator", manager: "Manager", assessor: "Assessor", viewer: "Viewer" },
     firstRunTitle: "Create the administrator account",
-    firstRunSub: "Raqib stores its user database in this device's persistent storage with salted password hashes. The first account is the administrator.",
+    firstRunSub: "Burhan stores its user database in this device's persistent storage with salted password hashes. The first account is the administrator.",
     signIn: "Sign in", signOut: "Sign out",
     nameLbl: "Full name", emailLbl: "Email", pwLbl: "Password", pw2Lbl: "Confirm password",
     createAdmin: "Create administrator",
@@ -200,7 +200,7 @@ const STR = {
     gapsOf: "{g} فجوات / {n} ضابطًا",
     heatTags: ["تعرّض حرج", "مرتفع", "مُدار", "مضبوط"],
     advTitle: "اسأل أو أرفق دليلًا",
-    advEmpty: "اطلب إرشادات التنفيذ، أو الأدلة المقبولة، أو خطط معالجة الفجوات، أو مواءمة NCA↔SAMA — بالعربية أو الإنجليزية؛ يجيب المستشار بلغة سؤالك. أرفق ملف PDF أو صورة أو ملفًا نصيًا وسيحلله «رقيب» كدليل، ويربطه بالضوابط المطابقة، ويعرضه في اللوحة.",
+    advEmpty: "اطلب إرشادات التنفيذ، أو الأدلة المقبولة، أو خطط معالجة الفجوات، أو مواءمة NCA↔SAMA — بالعربية أو الإنجليزية؛ يجيب المستشار بلغة سؤالك. أرفق ملف PDF أو صورة أو ملفًا نصيًا وسيحلله «برهان» كدليل، ويربطه بالضوابط المطابقة، ويعرضه في اللوحة.",
     advSuggestions: [
       "ما الأدلة المطلوبة لضوابط إدارة الهويات والصلاحيات؟",
       "خطة معالجة لأهم الفجوات خلال ٩٠ يومًا",
@@ -271,7 +271,7 @@ const STR = {
     nav: { dash: "اللوحة", controls: "الضوابط", risk: "المخاطر", evidence: "الأدلة", approvals: "الاعتمادات", advisor: "المستشار", users: "المستخدمون", settings: "الإعدادات" },
     roles: { admin: "مدير النظام", manager: "مدير", assessor: "مُقيِّم", viewer: "مُطّلع" },
     firstRunTitle: "إنشاء حساب مدير النظام",
-    firstRunSub: "يخزّن «رقيب» قاعدة المستخدمين في التخزين الدائم لهذا الجهاز مع تجزئة كلمات المرور المُملّحة. الحساب الأول هو مدير النظام.",
+    firstRunSub: "يخزّن «برهان» قاعدة المستخدمين في التخزين الدائم لهذا الجهاز مع تجزئة كلمات المرور المُملّحة. الحساب الأول هو مدير النظام.",
     signIn: "تسجيل الدخول", signOut: "تسجيل الخروج",
     nameLbl: "الاسم الكامل", emailLbl: "البريد الإلكتروني", pwLbl: "كلمة المرور", pw2Lbl: "تأكيد كلمة المرور",
     createAdmin: "إنشاء مدير النظام",
@@ -717,7 +717,7 @@ function reportHTML({ org, lang, selected, versions, overall, perFw, domainRows,
   const dir = isAr ? "rtl" : "ltr";
   const row = (cells, tag = "td") => `<tr>${cells.map((c) => `<${tag}>${c}</${tag}>`).join("")}</tr>`;
   return `<!doctype html><html dir="${dir}" lang="${lang}"><head><meta charset="utf-8">
-<title>Raqib — ${org || "GRC"} </title>
+<title>Burhan — ${org || "GRC"} </title>
 <style>
 body{font-family:'IBM Plex Sans','IBM Plex Sans Arabic',sans-serif;color:#1B201D;background:#fff;margin:40px;line-height:1.6}
 h1{font-size:24px;margin:0} h2{font-size:15px;margin:26px 0 8px;color:#11402F;border-bottom:2px solid #C9A45A;padding-bottom:4px}
@@ -730,7 +730,7 @@ td,th{border:1px solid #DDD9CB;padding:6px 9px;text-align:start} th{background:#
 .foot{margin-top:30px;font-size:11px;color:#7C847F}
 @media print{body{margin:14mm}}
 </style></head><body>
-<div class="meta">رقيب · RAQIB — ${new Date().toLocaleString(isAr ? "ar-SA" : undefined)}</div>
+<div class="meta">برهان · BURHAN — ${new Date().toLocaleString(isAr ? "ar-SA" : undefined)}</div>
 <h1>${org || t("orgFallback")}</h1>
 <div class="meta">${selected.map((f) => `${FRAMEWORKS[f].short} ${versions[f] || ""}`).join(" · ")} · ${generatedBy}</div>
 <h2>${isAr ? "الجاهزية" : "Posture"}</h2>
@@ -744,7 +744,7 @@ ${domainRows.map((d) => row([d.full, `${d.pct}%`, d.gaps])).join("")}</table>
 <h2>${isAr ? "الفجوات المفتوحة" : "Open gaps"}</h2>
 ${gaps.length ? `<table>${row(["ID", isAr ? "الضابط" : "Control", t("owner"), t("dueLbl")], "th")}
 ${gaps.map((g) => row([`<span class="gap">${g.id}</span>`, g.t, g.owner || "—", g.due || "—"])).join("")}</table>` : `<div class="meta">${t("gapsEmpty")}</div>`}
-<div class="foot">${isAr ? "أُنشئ بواسطة منصة رقيب. الكتالوجات من المصادر الرسمية" : "Generated by Raqib. Catalogs sourced from official publications"} (nca.gov.sa · rulebook.sama.gov.sa). ${evCount} ${isAr ? "دليلًا مسجلًا" : "evidence items on record"}.</div>
+<div class="foot">${isAr ? "أُنشئ بواسطة منصة برهان. الكتالوجات من المصادر الرسمية" : "Generated by Burhan. Catalogs sourced from official publications"} (nca.gov.sa · rulebook.sama.gov.sa). ${evCount} ${isAr ? "دليلًا مسجلًا" : "evidence items on record"}.</div>
 </body></html>`;
 }
 

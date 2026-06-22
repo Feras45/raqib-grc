@@ -1,4 +1,4 @@
-// Raqib · frontend API client. Same-origin; the session is an httpOnly cookie,
+// Burhan · frontend API client. Same-origin; the session is an httpOnly cookie,
 // so requests just need credentials:"include". No tokens touch JS.
 
 async function req(method, url, body) {

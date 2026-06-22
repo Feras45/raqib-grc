@@ -57,7 +57,7 @@ t("verifyTotp: prev-window code passes (skew)", () => {
 t("verifyTotp: far code fails", () => { if (C.verifyTotp(C.totp(SEC, { time: Date.now() - 600000 }), SEC)) throw new Error("should fail"); });
 t("verifyTotp: non-numeric rejected", () => eq(C.verifyTotp("abcdef", SEC), false));
 t("newTotpSecret: base32, decodes to 20 bytes", () => eq(C.base32Decode(C.newTotpSecret()).length, 20));
-t("otpauthURI: well-formed", () => { const u = C.otpauthURI({ secret: "ABC", account: "a@b.com" }); if (!u.startsWith("otpauth://totp/") || !u.includes("secret=ABC") || !u.includes("issuer=Raqib")) throw new Error(u); });
+t("otpauthURI: well-formed", () => { const u = C.otpauthURI({ secret: "ABC", account: "a@b.com" }); if (!u.startsWith("otpauth://totp/") || !u.includes("secret=ABC") || !u.includes("issuer=Burhan")) throw new Error(u); });
 
 /* ── recovery codes ── */
 t("recovery: format + hash/verify", () => {

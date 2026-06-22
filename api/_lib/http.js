@@ -1,4 +1,4 @@
-// Raqib · HTTP/session/RBAC helpers for Vercel Node functions.
+// Burhan · HTTP/session/RBAC helpers for Vercel Node functions.
 import { verifyToken, signToken } from "./crypto.js";
 import { can } from "./grc.js";
 import { userById, isLocked } from "./db.js";

@@ -1,4 +1,4 @@
-// Raqib · shared server-side context + assessment-apply logic.
+// Burhan · shared server-side context + assessment-apply logic.
 import { getSettings, getCatalogs, getAssessments, upsertAssessment, insertAudit, insertSnapshot } from "./db.js";
 import { flattenControls, scoreOf, makeRecord, buildPostureSummary, FRAMEWORKS } from "./grc.js";
 

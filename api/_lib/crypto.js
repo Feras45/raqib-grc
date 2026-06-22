@@ -1,4 +1,4 @@
-// Raqib · security primitives. Pure node:crypto, zero dependencies.
+// Burhan · security primitives. Pure node:crypto, zero dependencies.
 // Password KDF (scrypt), signed session tokens (HS256), RFC 6238 TOTP for MFA,
 // AES-256-GCM for secret-at-rest, recovery codes. All unit-tested in test/crypto.test.mjs.
 import crypto from "node:crypto";
@@ -117,7 +117,7 @@ export function newTotpSecret(bytes = 20) {
   return base32Encode(randomBytes(bytes));
 }
 
-export function otpauthURI({ secret, account, issuer = "Raqib", digits = 6, period = 30 }) {
+export function otpauthURI({ secret, account, issuer = "Burhan", digits = 6, period = 30 }) {
   const label = encodeURIComponent(`${issuer}:${account}`);
   const q = new URLSearchParams({ secret, issuer, algorithm: "SHA1", digits: String(digits), period: String(period) });
   return `otpauth://totp/${label}?${q.toString()}`;

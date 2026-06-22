@@ -1,4 +1,4 @@
-// Raqib · data layer over Neon Postgres (serverless HTTP driver).
+// Burhan · data layer over Neon Postgres (serverless HTTP driver).
 // Single org per deployment: ORG = 'default'. Multi-tenant = add org_id scoping.
 import { neon } from "@neondatabase/serverless";
 

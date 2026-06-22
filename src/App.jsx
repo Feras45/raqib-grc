@@ -17,7 +17,7 @@ import QRCode from "qrcode";
 import { api } from "./api.js";
 
 /* ────────────────────────────────────────────────────────────────────────────
-   RAQIB · رقيب — Saudi GRC Command Platform (v4)
+   BURHAN · برهان — Saudi GRC Command Platform (v4)
    NCA ECC / SAMA CSF · versions discovered live from official sources
    (nca.gov.sa, rulebook.sama.gov.sa) and cached. Nothing hardcoded.
 
@@ -82,7 +82,7 @@ const STR = {
     gapsOf: "{g} gaps / {n} controls",
     heatTags: ["Critical exposure", "Elevated", "Managed", "Controlled"],
     advTitle: "Ask, or attach evidence",
-    advEmpty: "Ask for implementation guidance, acceptable evidence, gap remediation plans, or NCA↔SAMA mapping — in English or Arabic; replies follow your language. Attach a PDF, image, or text file and Raqib will analyze it as evidence, link it to matching controls, and surface it on the dashboard.",
+    advEmpty: "Ask for implementation guidance, acceptable evidence, gap remediation plans, or NCA↔SAMA mapping — in English or Arabic; replies follow your language. Attach a PDF, image, or text file and Burhan will analyze it as evidence, link it to matching controls, and surface it on the dashboard.",
     advSuggestions: [
       "Evidence checklist for identity & access management",
       "ما الأدلة المطلوبة لإثبات الالتزام بضوابط النسخ الاحتياطي؟",
@@ -153,7 +153,7 @@ const STR = {
     nav: { dash: "Dashboard", controls: "Controls", risk: "Risk", evidence: "Evidence", approvals: "Approvals", advisor: "Advisor", users: "Users", settings: "Settings" },
     roles: { admin: "Administrator", manager: "Manager", assessor: "Assessor", viewer: "Viewer" },
     firstRunTitle: "Create the administrator account",
-    firstRunSub: "Raqib stores its user database in this device's persistent storage with salted password hashes. The first account is the administrator.",
+    firstRunSub: "Burhan stores its user database in this device's persistent storage with salted password hashes. The first account is the administrator.",
     signIn: "Sign in", signOut: "Sign out",
     nameLbl: "Full name", emailLbl: "Email", pwLbl: "Password", pw2Lbl: "Confirm password",
     createAdmin: "Create administrator",
@@ -230,7 +230,7 @@ const STR = {
     gapsOf: "{g} فجوات / {n} ضابطًا",
     heatTags: ["تعرّض حرج", "مرتفع", "مُدار", "مضبوط"],
     advTitle: "اسأل أو أرفق دليلًا",
-    advEmpty: "اطلب إرشادات التنفيذ، أو الأدلة المقبولة، أو خطط معالجة الفجوات، أو مواءمة NCA↔SAMA — بالعربية أو الإنجليزية؛ يجيب المستشار بلغة سؤالك. أرفق ملف PDF أو صورة أو ملفًا نصيًا وسيحلله «رقيب» كدليل، ويربطه بالضوابط المطابقة، ويعرضه في اللوحة.",
+    advEmpty: "اطلب إرشادات التنفيذ، أو الأدلة المقبولة، أو خطط معالجة الفجوات، أو مواءمة NCA↔SAMA — بالعربية أو الإنجليزية؛ يجيب المستشار بلغة سؤالك. أرفق ملف PDF أو صورة أو ملفًا نصيًا وسيحلله «برهان» كدليل، ويربطه بالضوابط المطابقة، ويعرضه في اللوحة.",
     advSuggestions: [
       "ما الأدلة المطلوبة لضوابط إدارة الهويات والصلاحيات؟",
       "خطة معالجة لأهم الفجوات خلال ٩٠ يومًا",
@@ -301,7 +301,7 @@ const STR = {
     nav: { dash: "اللوحة", controls: "الضوابط", risk: "المخاطر", evidence: "الأدلة", approvals: "الاعتمادات", advisor: "المستشار", users: "المستخدمون", settings: "الإعدادات" },
     roles: { admin: "مدير النظام", manager: "مدير", assessor: "مُقيِّم", viewer: "مُطّلع" },
     firstRunTitle: "إنشاء حساب مدير النظام",
-    firstRunSub: "يخزّن «رقيب» قاعدة المستخدمين في التخزين الدائم لهذا الجهاز مع تجزئة كلمات المرور المُملّحة. الحساب الأول هو مدير النظام.",
+    firstRunSub: "يخزّن «برهان» قاعدة المستخدمين في التخزين الدائم لهذا الجهاز مع تجزئة كلمات المرور المُملّحة. الحساب الأول هو مدير النظام.",
     signIn: "تسجيل الدخول", signOut: "تسجيل الخروج",
     nameLbl: "الاسم الكامل", emailLbl: "البريد الإلكتروني", pwLbl: "كلمة المرور", pw2Lbl: "تأكيد كلمة المرور",
     createAdmin: "إنشاء مدير النظام",
@@ -747,7 +747,7 @@ function reportHTML({ org, lang, selected, versions, overall, perFw, domainRows,
   const dir = isAr ? "rtl" : "ltr";
   const row = (cells, tag = "td") => `<tr>${cells.map((c) => `<${tag}>${c}</${tag}>`).join("")}</tr>`;
   return `<!doctype html><html dir="${dir}" lang="${lang}"><head><meta charset="utf-8">
-<title>Raqib — ${org || "GRC"} </title>
+<title>Burhan — ${org || "GRC"} </title>
 <style>
 body{font-family:'IBM Plex Sans','IBM Plex Sans Arabic',sans-serif;color:#1B201D;background:#fff;margin:40px;line-height:1.6}
 h1{font-size:24px;margin:0} h2{font-size:15px;margin:26px 0 8px;color:#11402F;border-bottom:2px solid #C9A45A;padding-bottom:4px}
@@ -760,7 +760,7 @@ td,th{border:1px solid #DDD9CB;padding:6px 9px;text-align:start} th{background:#
 .foot{margin-top:30px;font-size:11px;color:#7C847F}
 @media print{body{margin:14mm}}
 </style></head><body>
-<div class="meta">رقيب · RAQIB — ${new Date().toLocaleString(isAr ? "ar-SA" : undefined)}</div>
+<div class="meta">برهان · BURHAN — ${new Date().toLocaleString(isAr ? "ar-SA" : undefined)}</div>
 <h1>${org || t("orgFallback")}</h1>
 <div class="meta">${selected.map((f) => `${FRAMEWORKS[f].short} ${versions[f] || ""}`).join(" · ")} · ${generatedBy}</div>
 <h2>${isAr ? "الجاهزية" : "Posture"}</h2>
@@ -774,7 +774,7 @@ ${domainRows.map((d) => row([d.full, `${d.pct}%`, d.gaps])).join("")}</table>
 <h2>${isAr ? "الفجوات المفتوحة" : "Open gaps"}</h2>
 ${gaps.length ? `<table>${row(["ID", isAr ? "الضابط" : "Control", t("owner"), t("dueLbl")], "th")}
 ${gaps.map((g) => row([`<span class="gap">${g.id}</span>`, g.t, g.owner || "—", g.due || "—"])).join("")}</table>` : `<div class="meta">${t("gapsEmpty")}</div>`}
-<div class="foot">${isAr ? "أُنشئ بواسطة منصة رقيب. الكتالوجات من المصادر الرسمية" : "Generated by Raqib. Catalogs sourced from official publications"} (nca.gov.sa · rulebook.sama.gov.sa). ${evCount} ${isAr ? "دليلًا مسجلًا" : "evidence items on record"}.</div>
+<div class="foot">${isAr ? "أُنشئ بواسطة منصة برهان. الكتالوجات من المصادر الرسمية" : "Generated by Burhan. Catalogs sourced from official publications"} (nca.gov.sa · rulebook.sama.gov.sa). ${evCount} ${isAr ? "دليلًا مسجلًا" : "evidence items on record"}.</div>
 </body></html>`;
 }
 
@@ -896,7 +896,7 @@ function downloadBlob(name, mime, content) {
 function exportCSV(rows, assess, org, lang) {
   const lines = csvLines(rows, assess, (s) => stLabel(lang, s));
   downloadBlob(
-    `raqib-${(org || "report").replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`,
+    `burhan-${(org || "report").replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`,
     "text/csv;charset=utf-8", lines.join("\n"));
 }
 
@@ -904,7 +904,7 @@ function exportJSON(catalogs, assess, settings, audit, snaps, evidence, users) {
   const safeUsers = Object.fromEntries(Object.entries(users || {}).map(([id, u]) => {
     const { salt, hash, ...rest } = u; return [id, rest];
   }));
-  downloadBlob(`raqib-export-${new Date().toISOString().slice(0, 10)}.json`, "application/json",
+  downloadBlob(`burhan-export-${new Date().toISOString().slice(0, 10)}.json`, "application/json",
     JSON.stringify({ exportedAt: new Date().toISOString(), settings, catalogs, assessments: assess, audit, snapshots: snaps, evidence, users: safeUsers }, null, 2));
 }
 
@@ -1054,8 +1054,8 @@ function AuthShell({ children, lang, setLang }) {
       <div className="w-full" style={{ maxWidth: 440 }}>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <div style={{ fontFamily: "'IBM Plex Sans Arabic'", color: T.brassSoft, fontSize: 40, fontWeight: 700, lineHeight: 1 }}>رقيب</div>
-            <div style={{ color: "#CFE0D6", fontSize: 12, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, marginTop: 4 }}>Raqib GRC</div>
+            <div style={{ fontFamily: "'IBM Plex Sans Arabic'", color: T.brassSoft, fontSize: 40, fontWeight: 700, lineHeight: 1 }}>برهان</div>
+            <div style={{ color: "#CFE0D6", fontSize: 12, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, marginTop: 4 }}>Burhan GRC</div>
           </div>
           <LangToggle lang={lang} onToggle={() => setLang(lang === "ar" ? "en" : "ar")} dark />
         </div>
@@ -1198,9 +1198,9 @@ function Onboarding({ onConfirm, initial, lang, setLang }) {
       <div className="w-full" style={{ maxWidth: 560 }}>
         <div className="flex justify-end mb-4"><LangToggle lang={lang} onToggle={() => setLang(isAr ? "en" : "ar")} dark /></div>
         <div className="raqib-rise">
-          <div style={{ fontFamily: "'IBM Plex Sans Arabic'", color: T.brassSoft, fontSize: 44, fontWeight: 700, lineHeight: 1 }}>رقيب</div>
+          <div style={{ fontFamily: "'IBM Plex Sans Arabic'", color: T.brassSoft, fontSize: 44, fontWeight: 700, lineHeight: 1 }}>برهان</div>
           <div style={{ color: "#E9E6DA", fontSize: 22, fontWeight: 600, marginTop: 6 }}>
-            {isAr ? tt(lang, "tagline") : `Raqib — ${tt(lang, "tagline")}`}
+            {isAr ? tt(lang, "tagline") : `Burhan — ${tt(lang, "tagline")}`}
           </div>
           <div style={{ color: "#A9BDB2", fontSize: 14, marginTop: 8 }}>{tt(lang, "onboardSub")}</div>
         </div>
@@ -3058,7 +3058,7 @@ export default function App() {
       maturity: avgMaturity(allRows.filter((r) => r.fw === "samacsf"), assess),
       generatedBy: currentUser?.name || "",
     });
-    downloadBlob(`raqib-report-${new Date().toISOString().slice(0, 10)}.html`, "text/html;charset=utf-8", html);
+    downloadBlob(`burhan-report-${new Date().toISOString().slice(0, 10)}.html`, "text/html;charset=utf-8", html);
     toast(tt(lang, "toastReport"));
   }, [allRows, assess, catalogs, currentUser, evidence, lang, selected, settings, toast, versions]);
 
@@ -3232,8 +3232,8 @@ export default function App() {
 
       <aside className="flex flex-col items-stretch flex-shrink-0 w-16 md:w-52" style={{ background: T.green }}>
         <div className="px-3 md:px-5 pt-6 pb-5" style={{ textAlign: "center" }}>
-          <div style={{ fontFamily: "'IBM Plex Sans Arabic'", color: T.brassSoft, fontSize: 26, fontWeight: 700, lineHeight: 1 }}>رقيب</div>
-          <div className="hidden md:block" style={{ color: "#CFE0D6", fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 700, marginTop: 4 }}>Raqib GRC</div>
+          <div style={{ fontFamily: "'IBM Plex Sans Arabic'", color: T.brassSoft, fontSize: 26, fontWeight: 700, lineHeight: 1 }}>برهان</div>
+          <div className="hidden md:block" style={{ color: "#CFE0D6", fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 700, marginTop: 4 }}>Burhan GRC</div>
           <div className="hidden md:block" style={{ color: "#7E988B", fontSize: 11, marginTop: 2 }}>
             {selected.map((f) => `${FRAMEWORKS[f].short} ${versions[f]}`.trim()).join(" · ")}
           </div>

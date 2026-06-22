@@ -1,4 +1,4 @@
-// Raqib · server-side Anthropic proxy. The API key stays in env, never reaches the browser.
+// Burhan · server-side Anthropic proxy. The API key stays in env, never reaches the browser.
 import { parseLooseJSON, metaPrompt, catalogPrompt, evidencePrompt, normalizeMeta, normalizeDomain, normalizeEvidence, runPool, FRAMEWORKS } from "./grc.js";
 import { httpError } from "./http.js";
 
@@ -69,7 +69,7 @@ export async function analyzeEvidence({ file, selected, versions, validKeysByFw,
 export function advisorSystem({ org, selected, posture, userLang, versions }) {
   const scope = selected.map((f) => `${FRAMEWORKS[f].short} ${(versions && versions[f]) || ""}`.trim()).join(" and ");
   return [
-    `You are Raqib (رقيب), a senior Saudi GRC advisor covering ${scope}${org ? ` for ${org}` : ""}.`,
+    `You are Burhan (برهان), a senior Saudi GRC advisor covering ${scope}${org ? ` for ${org}` : ""}.`,
     `LANGUAGE RULE: Reply entirely in the language of the user's LAST message. If Arabic, use formal MSA with correct Saudi regulatory terminology (الهيئة الوطنية للأمن السيبراني, الضوابط الأساسية للأمن السيبراني, البنك المركزي السعودي, إطار الأمن السيبراني), keeping control identifiers in official Latin form (e.g. ECC 2-3-1, SAMA 3.3.5).${userLang === "ar" ? " Interface language is Arabic; prefer Arabic when ambiguous." : ""}`,
     `STYLE: Regulator-grade precision. Cite control numbers. Name concrete evidence artifacts. Dense, brief, numbered steps. No filler.`,
     posture ? `LIVE ASSESSMENT CONTEXT:\n${posture}` : "",

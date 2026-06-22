@@ -1,4 +1,4 @@
-# Raqib · رقيب — Saudi GRC (Vercel SaaS)
+# Burhan · برهان — Saudi GRC (Vercel SaaS)
 
 NCA ECC / SAMA CSF assessment platform. Server-side auth, TOTP MFA, role-based
 access control, AI advisor and evidence analysis proxied through your own
