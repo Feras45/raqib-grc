@@ -6,7 +6,7 @@ import { analyzeEvidence } from "./_lib/anthropic.js";
 import { loadContext } from "./_lib/context.js";
 
 const KINDS = { pdf: 1, image: 1, text: 1 };
-const SOFT_DEADLINE_MS = 8000;
+const SOFT_DEADLINE_MS = 9500; // just under Hobby's 10s wall
 function withDeadline(promise, ms) {
   let timer;
   const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Analysis is taking too long. Try again.")), ms); });
