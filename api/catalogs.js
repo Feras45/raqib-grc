@@ -16,7 +16,7 @@ async function requireScopeRole(req) {
 
 // Race the model call against a soft deadline so we always respond before Vercel's hard limit.
 // Hobby's hard cap is 10s; sit just under it so a clean error beats a platform kill.
-const SOFT_DEADLINE_MS = 9500;
+const SOFT_DEADLINE_MS = 30000; // Pro: 60s function limit, generous headroom
 // Web search is the dominant token cost here (it injects search results into the prompt) and the
 // main source of 429s and timeouts. The NCA ECC / SAMA CSF control structures are stable and known
 // to the model, so catalog building runs from model knowledge by default. Flip to true once your
