@@ -1,4 +1,4 @@
-import * as B from '/home/claude/raqib-saas/api/_lib/grc.js';
+import * as B from '../api/_lib/grc.js';
 let pass=0, fail=0; const fails=[];
 const t=(name,fn)=>{ try{ const r=fn(); if(r===false) throw new Error('returned false'); pass++; }catch(e){ fail++; fails.push(`${name}: ${e.message}`); } };
 const ta=async(name,fn)=>{ try{ await fn(); pass++; }catch(e){ fail++; fails.push(`${name}: ${e.message}`); } };

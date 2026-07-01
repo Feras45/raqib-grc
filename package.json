@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/crypto.test.mjs && node test/grc.test.mjs",
+    "test": "node test/crypto.test.mjs && node test/grc.test.mjs && node test/markdown.test.mjs && node test/advisor-context.test.mjs && node test/users-auth.test.mjs && node test/lookup.test.mjs && node test/uploads.test.mjs && node test/poam.test.mjs",
     "db:init": "node scripts/db-init.mjs"
   },
   "dependencies": {

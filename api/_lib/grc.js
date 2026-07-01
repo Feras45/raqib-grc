@@ -357,12 +357,12 @@ const FRAMEWORKS = {
 
 /* ── RBAC ──────────────────────────────────────────────────────────────── */
 
-const PERMS = ["manageUsers", "manageScope", "resetData", "refetch", "assess", "approve", "bulk", "importData", "evidence", "advisor", "exportData", "diagnostics"];
+const PERMS = ["manageUsers", "manageScope", "resetData", "refetch", "assess", "approve", "bulk", "importData", "evidence", "shareEvidence", "poam", "advisor", "exportData", "diagnostics"];
 const ROLE_MATRIX = {
-  admin:    { manageUsers: 1, manageScope: 1, resetData: 1, refetch: 1, assess: 1, approve: 1, bulk: 1, importData: 1, evidence: 1, advisor: 1, exportData: 1, diagnostics: 1 },
-  manager:  { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 1, assess: 1, approve: 1, bulk: 1, importData: 1, evidence: 1, advisor: 1, exportData: 1, diagnostics: 1 },
-  assessor: { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 0, assess: 1, approve: 0, bulk: 1, importData: 0, evidence: 1, advisor: 1, exportData: 1, diagnostics: 0 },
-  viewer:   { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 0, assess: 0, approve: 0, bulk: 0, importData: 0, evidence: 0, advisor: 1, exportData: 0, diagnostics: 0 },
+  admin:    { manageUsers: 1, manageScope: 1, resetData: 1, refetch: 1, assess: 1, approve: 1, bulk: 1, importData: 1, evidence: 1, shareEvidence: 1, poam: 1, advisor: 1, exportData: 1, diagnostics: 1 },
+  manager:  { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 1, assess: 1, approve: 1, bulk: 1, importData: 1, evidence: 1, shareEvidence: 1, poam: 1, advisor: 1, exportData: 1, diagnostics: 1 },
+  assessor: { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 0, assess: 1, approve: 0, bulk: 1, importData: 0, evidence: 1, shareEvidence: 1, poam: 1, advisor: 1, exportData: 1, diagnostics: 0 },
+  viewer:   { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 0, assess: 0, approve: 0, bulk: 0, importData: 0, evidence: 0, shareEvidence: 0, poam: 0, advisor: 1, exportData: 0, diagnostics: 0 },
 };
 const ROLES = Object.keys(ROLE_MATRIX);
 const can = (role, perm) => !!(ROLE_MATRIX[role] && ROLE_MATRIX[role][perm]);
@@ -748,6 +748,23 @@ ${gaps.map((g) => row([`<span class="gap">${g.id}</span>`, g.t, g.owner || "—"
 </body></html>`;
 }
 
+/* ── Evidence-registry control lookup ──────────────────────────────────────
+   key "fw:cid" → framework entry (title, context description, source) or
+   null when the code has no mapping in the loaded catalogs. */
+function lookupControl(key, rows) {
+  const r = (rows || []).find((x) => x.key === key);
+  if (!r) return null;
+  const fw = FRAMEWORKS[r.fw] || {};
+  return {
+    key, fw: r.fw, id: r.control.id, title: r.control.t,
+    domain: r.domain, domainAr: r.domainAr || "",
+    subdomain: r.sub.en, subdomainAr: r.sub.ar || "",
+    framework: fw.short || r.fw,
+    regulator: fw.regulator || "", regulatorAr: fw.regulatorAr || "",
+    source: fw.officialSource || "",
+  };
+}
+
 /* ── Control-ID detection (split regex global; tester rebuilt per call) ── */
 const CID_SRC = "(?:ECC|CSF|SAMA)?\\s?\\b\\d-\\d{1,2}(?:-\\d{1,2}){0,2}\\b|\\b3\\.\\d\\.\\d+(?:\\.[\\w]+)?\\b";
 const CID_SPLIT = new RegExp(`(${CID_SRC})`, "g");
@@ -761,4 +778,4 @@ export { T, STR, tt, stLabel, FRAMEWORKS, PERMS, ROLE_MATRIX, ROLES, can,
   parseCSV, statusFromLabel, buildImport,
   makeRecord, approveRecord, rejectRecord,
   flattenControls, scoreOf, evidenceCoverage, avgMaturity, buildPostureSummary,
-  csvLines, reportHTML, CID_SRC, CID_SPLIT, isCid, hasArabic };
+  lookupControl, csvLines, reportHTML, CID_SRC, CID_SPLIT, isCid, hasArabic };
