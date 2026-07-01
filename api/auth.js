@@ -9,7 +9,7 @@ import {
 } from "./_lib/crypto.js";
 import {
   countUsers, insertUser, userByEmail, userById, isLocked, registerFailure, clearFailures,
-  setMfaPending, enableMfa, disableMfa, replaceRecoveryCodes, unusedRecoveryCodes, consumeRecoveryCode,
+  setUserPassword, setMfaPending, enableMfa, disableMfa, replaceRecoveryCodes, unusedRecoveryCodes, consumeRecoveryCode,
 } from "./_lib/db.js";
 
 const GENERIC = "Invalid email or password";
@@ -82,6 +82,20 @@ async function mfaVerify(req, res) {
   send(res, 200, { ok: true, user: publicUser(user) });
 }
 
+/* Self-service password change. The current password is REQUIRED (no email
+   infrastructure exists in this deployment, so an email-token path is not
+   offered). Hashing stays on the repo's single scheme: scrypt via crypto.js.
+   Plaintext is never stored or logged. */
+async function changePassword(req, res) {
+  const user = await requireUser(req);
+  const { currentPassword, newPassword } = await readJson(req);
+  if (String(newPassword || "").length < 8) throw httpError(400, "Password must be at least 8 characters");
+  if (!verifyPassword(String(currentPassword || ""), user.pw_hash)) throw httpError(401, "Current password incorrect");
+  if (String(currentPassword) === String(newPassword)) throw httpError(400, "New password must be different");
+  await setUserPassword(user.id, hashPassword(String(newPassword)));
+  send(res, 200, { ok: true });
+}
+
 async function mfaDisable(req, res) {
   const user = await requireUser(req);
   const { password } = await readJson(req);
@@ -91,7 +105,7 @@ async function mfaDisable(req, res) {
 }
 
 const GETS = { me, status };
-const POSTS = { bootstrap, login, logout, "mfa-setup": mfaSetup, "mfa-enable": mfaEnable, "mfa-verify": mfaVerify, "mfa-disable": mfaDisable };
+const POSTS = { bootstrap, login, logout, "change-password": changePassword, "mfa-setup": mfaSetup, "mfa-enable": mfaEnable, "mfa-verify": mfaVerify, "mfa-disable": mfaDisable };
 
 export default route({
   GET: async (req, res) => { const fn = GETS[req.query?.action]; if (!fn) throw httpError(400, "Unknown action"); await fn(req, res); },

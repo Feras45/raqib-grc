@@ -11,10 +11,15 @@ import {
   CheckCheck, Trash2, Copy, RotateCcw, Languages, Anchor,
   LogOut, Users as UsersIcon, FileCheck2, Paperclip, Upload,
   ClipboardCheck, FileText, Image as ImageIcon, FileDown, Gauge as GaugeIcon,
-  KeyRound, UserPlus, Ban, BadgeCheck, Eye, ShieldQuestion, Smartphone,
+  KeyRound, UserPlus, Ban, BadgeCheck, Eye, ShieldQuestion, Smartphone, ListTodo,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { api } from "./api.js";
+import { parseBlocks } from "./markdown.js";
+import {
+  ACTION_STATUSES, ACTION_PRIORITIES, isOverdue, isDueSoon, actionEditScope,
+  canTransition, canAssignOwner, canCreateAction, canArchiveAction, closureGuard, isManagerial,
+} from "../api/_lib/poam.js";
 
 /* ────────────────────────────────────────────────────────────────────────────
    BURHAN · برهان — Saudi GRC Command Platform (v4)
@@ -32,9 +37,11 @@ const T = {
   paper: "#F2F1EA", panel: "#FBFAF5",
   ink: "#1B201D", inkSoft: "#4A5350", inkFaint: "#7C847F",
   green: "#11402F", greenDeep: "#0B2C20",
+  emerald: "#168F5B", // batch-feature accent (POA&M, upload links, advisor tables)
   brass: "#A87B22", brassSoft: "#C9A45A",
   line: "#DDD9CB",
   compliant: "#1F7A4D", partial: "#B8861B", gap: "#B23A2E",
+  amber: "#B8861B", red: "#B23A2E", // status-only (due-soon/blocked · overdue/expired/revoked)
   na: "#8E9088", unassessed: "#A9ADA6", sama: "#6B4516",
 };
 
@@ -150,7 +157,7 @@ const STR = {
     toastApproved: "Approved", toastRejected: "Rejected and reverted",
     railNote: "Official-source catalogs, cached locally.",
     statusLabels: { compliant: "Compliant", partial: "Partially compliant", gap: "Non-compliant", na: "Not applicable", unassessed: "Not assessed" },
-    nav: { dash: "Dashboard", controls: "Controls", risk: "Risk", evidence: "Evidence", approvals: "Approvals", advisor: "Advisor", users: "Users", settings: "Settings" },
+    nav: { dash: "Dashboard", controls: "Controls", risk: "Risk", evidence: "Evidence", actions: "Corrective actions", approvals: "Approvals", advisor: "Advisor", users: "Users", settings: "Settings" },
     roles: { admin: "Administrator", manager: "Manager", assessor: "Assessor", viewer: "Viewer" },
     firstRunTitle: "Create the administrator account",
     firstRunSub: "Burhan stores its user database in this device's persistent storage with salted password hashes. The first account is the administrator.",
@@ -193,6 +200,67 @@ const STR = {
     reportBtn: "Executive report",
     avgMaturity: "Avg maturity {m}/5",
     maturityCard: "SAMA maturity",
+    /* users: remove + self password */
+    confirm: "Confirm",
+    removeConfirm: "Deactivate {n}? Sign-in is blocked immediately; historical records remain.",
+    pwChangeTitle: "Change password",
+    pwCurrentLbl: "Current password",
+    pwNewLbl: "New password",
+    pwChanged: "Password updated",
+    /* evidence: control popover */
+    ctrlSource: "Source",
+    ctrlNoMap: "No mapping for this code in the loaded catalogs.",
+    /* evidence: external upload links */
+    genLink: "Generate upload link",
+    linkExpiry: "Expiry (days)",
+    linkUses: "Max uses",
+    linkOnce: "This link is shown once — copy it now. Only a hash is kept on the server.",
+    copyLink: "Copy link",
+    uploadLinks: "Upload links",
+    usesLeft: "{n} of {m} uses left",
+    revoke: "Revoke",
+    linkState: { active: "Active", expired: "Expired", revoked: "Revoked", used_up: "Used up" },
+    extUpload: "External upload",
+    pubUploadTitle: "Submit evidence",
+    pubUploadFor: "Upload file(s) for:",
+    pubYourName: "Your name (optional)",
+    pubNote: "Note (optional)",
+    pubSubmit: "Upload",
+    pubDone: "Received. Thank you — you can close this page.",
+    pubInvalid: "This upload link is invalid, expired, or has been used.",
+    pubLimits: "Accepted: {ext} · max {mb} MB per file · up to {n} files",
+    /* corrective actions (POA&M) */
+    poamTitle: "Corrective actions",
+    newAction: "New corrective action",
+    createFromGap: "Create corrective action",
+    actTitleLbl: "Title",
+    actDescLbl: "Description",
+    priorityLbl: "Priority",
+    actStatus: { "Open": "Open", "In Progress": "In progress", "Blocked": "Blocked", "Closed": "Closed" },
+    actPriority: { Low: "Low", Medium: "Medium", High: "High", Critical: "Critical" },
+    overdueLbl: "Overdue",
+    dueSoonLbl: "Due soon",
+    allOwners: "All owners",
+    onlyOverdue: "Overdue only",
+    requestClosure: "Request closure",
+    closureRequested: "Closure requested",
+    approveClose: "Approve & close",
+    reopen: "Reopen",
+    closureNoteLbl: "Closure note",
+    closureNeeds: "Closing requires ≥1 linked evidence item and a closure note",
+    linkEvidenceLbl: "Linked evidence",
+    linkControlsLbl: "Linked controls",
+    openCount: "Open",
+    byOwner: "By owner",
+    byFramework: "By framework",
+    timelineLbl: "Timeline",
+    noActions: "No corrective actions yet. Create one from a gap control or with the button above.",
+    archiveBtn: "Archive",
+    saveBtn: "Save",
+    createBtn: "Create",
+    unassigned: "Unassigned",
+    toastAction: "Corrective action saved",
+    closedBadge: "Closed",
   },
   ar: {
     tagline: "منصة قيادة الامتثال للجهات الخاضعة للتنظيم في السعودية",
@@ -298,7 +366,7 @@ const STR = {
     toastApproved: "تم الاعتماد", toastRejected: "رُفض وأُعيدت الحالة",
     railNote: "كتالوجات من المصادر الرسمية، مخزَّنة محليًا.",
     statusLabels: { compliant: "ملتزم", partial: "التزام جزئي", gap: "غير ملتزم", na: "لا ينطبق", unassessed: "لم يُقيَّم" },
-    nav: { dash: "اللوحة", controls: "الضوابط", risk: "المخاطر", evidence: "الأدلة", approvals: "الاعتمادات", advisor: "المستشار", users: "المستخدمون", settings: "الإعدادات" },
+    nav: { dash: "اللوحة", controls: "الضوابط", risk: "المخاطر", evidence: "الأدلة", actions: "خطط المعالجة", approvals: "الاعتمادات", advisor: "المستشار", users: "المستخدمون", settings: "الإعدادات" },
     roles: { admin: "مدير النظام", manager: "مدير", assessor: "مُقيِّم", viewer: "مُطّلع" },
     firstRunTitle: "إنشاء حساب مدير النظام",
     firstRunSub: "يخزّن «برهان» قاعدة المستخدمين في التخزين الدائم لهذا الجهاز مع تجزئة كلمات المرور المُملّحة. الحساب الأول هو مدير النظام.",
@@ -341,6 +409,67 @@ const STR = {
     reportBtn: "التقرير التنفيذي",
     avgMaturity: "متوسط النضج {m}/٥",
     maturityCard: "نضج SAMA",
+    /* المستخدمون: الإزالة وكلمة المرور الذاتية */
+    confirm: "تأكيد",
+    removeConfirm: "إيقاف {n}؟ يُمنع تسجيل الدخول فورًا وتبقى السجلات التاريخية.",
+    pwChangeTitle: "تغيير كلمة المرور",
+    pwCurrentLbl: "كلمة المرور الحالية",
+    pwNewLbl: "كلمة المرور الجديدة",
+    pwChanged: "تم تحديث كلمة المرور",
+    /* الأدلة: نافذة الضابط */
+    ctrlSource: "المصدر",
+    ctrlNoMap: "لا يوجد ضابط مطابق لهذا الرمز في الكتالوجات المحمّلة.",
+    /* الأدلة: روابط الرفع الخارجية */
+    genLink: "إنشاء رابط رفع",
+    linkExpiry: "الصلاحية (أيام)",
+    linkUses: "الحد الأقصى للاستخدام",
+    linkOnce: "يُعرض هذا الرابط مرة واحدة — انسخه الآن. يُخزَّن على الخادم كتجزئة فقط.",
+    copyLink: "نسخ الرابط",
+    uploadLinks: "روابط الرفع",
+    usesLeft: "متبقٍ {n} من {m}",
+    revoke: "إبطال",
+    linkState: { active: "نشط", expired: "منتهٍ", revoked: "مُبطل", used_up: "مستنفد" },
+    extUpload: "رفع خارجي",
+    pubUploadTitle: "إرسال دليل",
+    pubUploadFor: "ارفع ملفًا/ملفات لـ:",
+    pubYourName: "اسمك (اختياري)",
+    pubNote: "ملاحظة (اختياري)",
+    pubSubmit: "رفع",
+    pubDone: "تم الاستلام. شكرًا — يمكنك إغلاق الصفحة.",
+    pubInvalid: "رابط الرفع غير صالح أو منتهٍ أو مستنفد.",
+    pubLimits: "المقبول: {ext} · بحد أقصى {mb} م.ب للملف · حتى {n} ملفات",
+    /* خطط المعالجة (POA&M) */
+    poamTitle: "خطط المعالجة",
+    newAction: "إجراء تصحيحي جديد",
+    createFromGap: "إنشاء إجراء تصحيحي",
+    actTitleLbl: "العنوان",
+    actDescLbl: "الوصف",
+    priorityLbl: "الأولوية",
+    actStatus: { "Open": "مفتوح", "In Progress": "قيد التنفيذ", "Blocked": "متعثر", "Closed": "مغلق" },
+    actPriority: { Low: "منخفضة", Medium: "متوسطة", High: "عالية", Critical: "حرجة" },
+    overdueLbl: "متأخر",
+    dueSoonLbl: "يستحق قريبًا",
+    allOwners: "كل المسؤولين",
+    onlyOverdue: "المتأخر فقط",
+    requestClosure: "طلب الإغلاق",
+    closureRequested: "طُلب الإغلاق",
+    approveClose: "اعتماد وإغلاق",
+    reopen: "إعادة فتح",
+    closureNoteLbl: "ملاحظة الإغلاق",
+    closureNeeds: "يتطلب الإغلاق دليلًا مرتبطًا واحدًا على الأقل وملاحظة إغلاق",
+    linkEvidenceLbl: "الأدلة المرتبطة",
+    linkControlsLbl: "الضوابط المرتبطة",
+    openCount: "مفتوح",
+    byOwner: "حسب المسؤول",
+    byFramework: "حسب الإطار",
+    timelineLbl: "السجل الزمني",
+    noActions: "لا توجد إجراءات تصحيحية بعد. أنشئ إجراءً من ضابط فجوة أو بالزر أعلاه.",
+    archiveBtn: "أرشفة",
+    saveBtn: "حفظ",
+    createBtn: "إنشاء",
+    unassigned: "غير مُسند",
+    toastAction: "تم حفظ الإجراء التصحيحي",
+    closedBadge: "مغلق",
   },
 };
 
@@ -387,12 +516,12 @@ const FRAMEWORKS = {
 
 /* ── RBAC ──────────────────────────────────────────────────────────────── */
 
-const PERMS = ["manageUsers", "manageScope", "resetData", "refetch", "assess", "approve", "bulk", "importData", "evidence", "advisor", "exportData", "diagnostics"];
+const PERMS = ["manageUsers", "manageScope", "resetData", "refetch", "assess", "approve", "bulk", "importData", "evidence", "shareEvidence", "poam", "advisor", "exportData", "diagnostics"];
 const ROLE_MATRIX = {
-  admin:    { manageUsers: 1, manageScope: 1, resetData: 1, refetch: 1, assess: 1, approve: 1, bulk: 1, importData: 1, evidence: 1, advisor: 1, exportData: 1, diagnostics: 1 },
-  manager:  { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 1, assess: 1, approve: 1, bulk: 1, importData: 1, evidence: 1, advisor: 1, exportData: 1, diagnostics: 1 },
-  assessor: { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 0, assess: 1, approve: 0, bulk: 1, importData: 0, evidence: 1, advisor: 1, exportData: 1, diagnostics: 0 },
-  viewer:   { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 0, assess: 0, approve: 0, bulk: 0, importData: 0, evidence: 0, advisor: 1, exportData: 0, diagnostics: 0 },
+  admin:    { manageUsers: 1, manageScope: 1, resetData: 1, refetch: 1, assess: 1, approve: 1, bulk: 1, importData: 1, evidence: 1, shareEvidence: 1, poam: 1, advisor: 1, exportData: 1, diagnostics: 1 },
+  manager:  { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 1, assess: 1, approve: 1, bulk: 1, importData: 1, evidence: 1, shareEvidence: 1, poam: 1, advisor: 1, exportData: 1, diagnostics: 1 },
+  assessor: { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 0, assess: 1, approve: 0, bulk: 1, importData: 0, evidence: 1, shareEvidence: 1, poam: 1, advisor: 1, exportData: 1, diagnostics: 0 },
+  viewer:   { manageUsers: 0, manageScope: 0, resetData: 0, refetch: 0, assess: 0, approve: 0, bulk: 0, importData: 0, evidence: 0, shareEvidence: 0, poam: 0, advisor: 1, exportData: 0, diagnostics: 0 },
 };
 const ROLES = Object.keys(ROLE_MATRIX);
 const can = (role, perm) => !!(ROLE_MATRIX[role] && ROLE_MATRIX[role][perm]);
@@ -984,8 +1113,44 @@ function RichLine({ line }) {
   });
 }
 
+/* GFM table from the advisor, rendered as a real table: emerald header accent,
+   off-white/white surfaces, horizontal scroll on narrow widths. Cells go
+   through RichLine so control-ID chips and **bold** still work inside tables.
+   parseBlocks (src/markdown.js) is streaming-safe: partial tables never throw. */
+function MdTable({ block }) {
+  const cellBase = { padding: "6px 10px", fontSize: 12.5, borderBottom: `1px solid ${T.line}`, whiteSpace: "nowrap" };
+  return (
+    <div style={{ overflowX: "auto", margin: "8px 0", borderRadius: 8, border: `1px solid ${T.line}`, background: "#FFFFFF" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 320 }}>
+        <thead>
+          <tr>
+            {block.header.map((h, i) => (
+              <th key={i} style={{ ...cellBase, textAlign: block.align[i] || "start", color: "#FFFFFF", background: T.emerald, fontWeight: 700, borderBottom: "none" }}>
+                <RichLine line={h} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.rows.map((r, ri) => (
+            <tr key={ri} style={{ background: ri % 2 ? "#FFFFFF" : T.panel }}>
+              {r.map((c, ci) => (
+                <td key={ci} style={{ ...cellBase, textAlign: block.align[ci] || "start", color: T.ink }}>
+                  <RichLine line={c} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function RichText({ text }) {
-  return String(text).split("\n").map((line, i) => {
+  return parseBlocks(String(text)).map((block, i) => {
+    if (block.type === "table") return <MdTable key={i} block={block} />;
+    const line = block.text;
     const listM = line.match(/^(\s*)([-•]|\d+[\).\u060D.]|[\u0660-\u0669]+[\).\u060D.])\s+(.*)$/);
     if (listM) {
       return (
@@ -1335,9 +1500,11 @@ function EvidenceResultCard({ ev, lang, onJump }) {
       <div className="flex items-center gap-2 flex-wrap">
         <FileCheck2 size={14} color={T.green} />
         <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }} dir="auto">{ev.name}</span>
-        <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: `${QC[ev.quality]}1A`, color: QC[ev.quality] }}>
-          {tt(lang, "evQuality")[ev.quality]}
-        </span>
+        {ev.quality && (
+          <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: `${QC[ev.quality]}1A`, color: QC[ev.quality] }}>
+            {tt(lang, "evQuality")[ev.quality]}
+          </span>
+        )}
         <span style={{ fontSize: 10.5, color: T.inkFaint }}>{ev.docType}</span>
       </div>
       <div dir="auto" style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 5, lineHeight: 1.6 }}>{ev.summary}</div>
@@ -1358,7 +1525,7 @@ function EvidenceResultCard({ ev, lang, onJump }) {
   );
 }
 
-function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selected, toast, lang, postureSummary, versions, onEvidence, validKeysByFw, user, goEvidence }) {
+function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selected, toast, lang, postureSummary, versions, onEvidence, validKeysByFw, user, goEvidence, cid, onNewThread }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -1367,9 +1534,26 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
   const endRef = useRef(null);
   const taRef = useRef(null);
   const fileRef = useRef(null);
+  const loadedCidRef = useRef(null);
   const allowEv = can(user.role, "evidence");
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy, analyzing]);
+
+  // Conversation memory: hydrate this chat's stored turns + evidence refs once per cid.
+  useEffect(() => {
+    if (!cid || loadedCidRef.current === cid) return;
+    loadedCidRef.current = cid;
+    (async () => {
+      try {
+        const { messages } = await api.advisorHistory(cid);
+        if (messages && messages.length) {
+          setMsgs(messages.map((m) => m.ev
+            ? { role: "assistant", ev: m.ev, content: m.ev.summary || "", t: m.t }
+            : { role: m.role, content: m.content, t: m.t }));
+        }
+      } catch { /* history is a convenience; chat still works without it */ }
+    })();
+  }, [cid, setMsgs]);
 
   useEffect(() => {
     if (pendingControl) {
@@ -1389,11 +1573,14 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
     ta.style.height = Math.min(ta.scrollHeight, 140) + "px";
   };
 
-  const run = async (history) => {
+  // The server rebuilds context from the stored conversation (turns + evidence
+  // refs) — only the new message travels; history is never re-sent from here.
+  const run = async (text, { regenerate: regen = false } = {}) => {
     setBusy(true);
     try {
-      const messages = history.slice(-12).filter((m) => !m.error && !m.ev).map((m) => ({ role: m.role, content: m.content }));
-      const { reply } = await api.advisor(messages, ground, lang);
+      const { reply } = regen
+        ? await api.advisorRegen(cid, ground, lang)
+        : await api.advisorSend(cid, text, ground, lang);
       setMsgs((p) => [...p, { role: "assistant", content: reply, t: Date.now() }]);
     } catch (e) {
       toast(e.message || tt(lang, "advFail"), "error");
@@ -1403,24 +1590,26 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
 
   const send = async () => {
     const text = input.trim();
-    if (!text || busy || analyzing) return;
-    const next = [...msgs.filter((m) => !m.error), { role: "user", content: text, t: Date.now() }];
-    setMsgs(next); setInput("");
+    if (!text || busy || analyzing || !cid) return;
+    setMsgs([...msgs.filter((m) => !m.error), { role: "user", content: text, t: Date.now() }]);
+    setInput("");
     if (taRef.current) taRef.current.style.height = "auto";
-    await run(next);
+    await run(text);
   };
 
   const retryLast = async () => {
+    if (busy || !cid) return;
     const clean = msgs.filter((m) => !m.error);
     setMsgs(clean);
-    await run(clean);
+    // A failed call never persisted the user turn server-side; re-send it.
+    const lastUser = [...clean].reverse().find((m) => m.role === "user" && !m.attach && !m.ev);
+    if (lastUser) await run(lastUser.content);
   };
 
   const regenerate = async (idx) => {
-    if (busy) return;
-    const upTo = msgs.slice(0, idx).filter((m) => !m.error);
-    setMsgs(upTo);
-    await run(upTo);
+    if (busy || !cid) return;
+    setMsgs(msgs.slice(0, idx).filter((m) => !m.error));
+    await run(null, { regenerate: true });
   };
 
   const copyMsg = async (text, idx) => {
@@ -1440,7 +1629,7 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
       const payload = { name: file.name, kind, size: file.size };
       if (kind === "text") payload.text = (await readFileAs(file, "text")).slice(0, 24000);
       else { payload.data = await readFileAs(file, "b64"); if (kind === "image") payload.mime = file.type || (file.name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg"); }
-      const { evidence: ev } = await api.analyzeEvidence(payload);
+      const { evidence: ev } = await api.analyzeEvidence(payload, cid);
       onEvidence(ev);
       setMsgs((p) => [...p, { role: "assistant", ev, content: ev.summary, t: Date.now() }]);
       toast(tt(lang, "toastEv"));
@@ -1468,7 +1657,7 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
             <Anchor size={11} /> {tt(lang, "ground")}
           </button>
           {msgs.length > 0 && (
-            <button onClick={() => setMsgs([])} className="text-xs font-semibold flex items-center gap-1.5 raqib-focus" style={{ color: T.inkFaint }}>
+            <button onClick={onNewThread} className="text-xs font-semibold flex items-center gap-1.5 raqib-focus" style={{ color: T.inkFaint }}>
               <Trash2 size={12} /> {tt(lang, "clearThread")}
             </button>
           )}
@@ -1582,7 +1771,7 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
    CONTROL DRAWER — evidence record, maturity, review state, AI guidance
 ══════════════════════════════════════════════════════════════════════════ */
 
-function ControlDrawer({ row, assess, onSave, onClose, audit, guidance, onGuidance, onAskAI, lang, evidence, user }) {
+function ControlDrawer({ row, assess, onSave, onClose, audit, guidance, onGuidance, onAskAI, lang, evidence, user, onCreateAction }) {
   const rec = assess[row.key] || {};
   const [note, setNote] = useState(rec.note || "");
   const [owner, setOwner] = useState(rec.owner || "");
@@ -1712,6 +1901,15 @@ function ControlDrawer({ row, assess, onSave, onClose, audit, guidance, onGuidan
             </button>
           )}
 
+          {/* POA&M entry point: remediate a gap/partial control from here */}
+          {canCreateAction(user.role) && (rec.s === "gap" || rec.s === "partial") && (
+            <button onClick={() => onCreateAction(row)}
+              className="w-full rounded-lg py-2.5 font-semibold inline-flex items-center justify-center gap-2 raqib-focus"
+              style={{ background: "rgba(22,143,91,0.1)", color: T.emerald, fontSize: 13.5, border: `1px solid ${T.emerald}` }}>
+              <ListTodo size={14} /> {tt(lang, "createFromGap")}
+            </button>
+          )}
+
           {linked.length > 0 && (
             <Card className="p-4">
               <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft }}>
@@ -1720,7 +1918,7 @@ function ControlDrawer({ row, assess, onSave, onClose, audit, guidance, onGuidan
               <div className="mt-2 space-y-2">
                 {linked.map((ev) => (
                   <div key={ev.id} className="flex items-start gap-2" style={{ fontSize: 12, color: T.inkSoft }}>
-                    <span className="rounded-full mt-1" style={{ width: 7, height: 7, background: QC[ev.quality], flexShrink: 0 }} />
+                    <span className="rounded-full mt-1" style={{ width: 7, height: 7, background: QC[ev.quality] || T.na, flexShrink: 0 }} />
                     <div className="min-w-0">
                       <div dir="auto" style={{ fontWeight: 600, color: T.ink }}>{ev.name}</div>
                       <div dir="auto" style={{ fontSize: 11.5, lineHeight: 1.5 }}>{ev.summary.slice(0, 110)}{ev.summary.length > 110 ? "…" : ""}</div>
@@ -2264,10 +2462,158 @@ function ControlsView({ allRows, selected, assess, onStatus, onBulk, onOpen, lan
    EVIDENCE REGISTRY
 ══════════════════════════════════════════════════════════════════════════ */
 
-function EvidenceView({ evidence, setEvidence, lang, user, allRowsByKey, goAdvisor, toast }) {
+/* Item 5: clicking a control code in the registry opens a popover with the
+   control's title, catalog context and official source — or a clear
+   "no mapping" state. Never navigates away. */
+function ControlPopover({ keyStr, row, versions, lang, onClose }) {
+  const isAr = lang === "ar";
+  const cid = keyStr.split(":")[1] || keyStr;
+  const fw = row ? FRAMEWORKS[row.fw] : null;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 90, background: "rgba(20,28,24,0.3)" }} onClick={onClose}>
+      <Card className="p-5 raqib-drawer" style={{ maxWidth: 440, width: "92%", background: "#FFFFFF" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <Mono style={{ fontWeight: 700, color: "#FFFFFF", background: T.emerald, borderRadius: 6, padding: "2px 10px", fontSize: 14 }}>{cid}</Mono>
+          <button onClick={onClose} className="rounded-md p-1.5 raqib-focus" style={{ background: "rgba(0,0,0,0.05)" }}>
+            <X size={15} color={T.inkSoft} />
+          </button>
+        </div>
+        {row ? (
+          <div className="mt-3 space-y-2">
+            <div dir="auto" style={{ fontSize: 15, fontWeight: 700, color: T.ink, lineHeight: 1.45, textAlign: "start" }}>{row.control.t}</div>
+            <div dir="auto" style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.6, textAlign: "start" }}>
+              {isAr && row.domainAr ? row.domainAr : row.domain} · {isAr && row.sub.ar ? row.sub.ar : row.sub.en}
+            </div>
+            <div className="rounded-lg p-3" style={{ background: T.panel, border: `1px solid ${T.line}` }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.inkFaint }}>{tt(lang, "ctrlSource")}</div>
+              <div style={{ fontSize: 12.5, color: T.ink, marginTop: 4 }}>
+                {fw.short} {(versions && versions[row.fw]) || ""} · {isAr ? fw.regulatorAr : fw.regulator}
+              </div>
+              <div style={{ fontSize: 12, marginTop: 2 }} dir="ltr">
+                <a href={`https://${fw.officialSource}`} target="_blank" rel="noopener noreferrer"
+                  className="raqib-focus" style={{ color: T.emerald, fontWeight: 600 }}>
+                  {fw.officialSource}
+                </a>
+                {" · "}<Mono style={{ color: T.inkSoft, fontSize: 11.5 }}>{fw.short} {row.control.id}</Mono>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 rounded-lg p-3" style={{ background: "rgba(184,134,27,0.08)", border: "1px solid rgba(184,134,27,0.3)", fontSize: 12.5, color: T.amber, fontWeight: 600 }}>
+            {tt(lang, "ctrlNoMap")}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* Item 6: per-item external upload links (Admin/Manager/Assessor; the server
+   enforces the same perm on every endpoint). The raw link is shown ONCE. */
+function UploadLinksPanel({ evidenceId, lang, toast }) {
+  const [links, setLinks] = useState(null);
+  const [expiresDays, setExpiresDays] = useState(7);
+  const [maxUses, setMaxUses] = useState(1);
+  const [fresh, setFresh] = useState(null); // { url, expiresAt, maxUses } — shown once
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const load = useCallback(async () => {
+    try { const { links: ls } = await api.listUploadLinks(evidenceId); setLinks(ls); }
+    catch (e) { toast(e.message, "error"); }
+  }, [evidenceId, toast]);
+  useEffect(() => { load(); }, [load]);
+
+  const gen = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { link } = await api.createUploadLink(evidenceId, expiresDays, maxUses);
+      setFresh({ url: `${window.location.origin}/u/${link.token}`, expiresAt: link.expiresAt, maxUses: link.maxUses });
+      setCopied(false);
+      await load();
+    } catch (e) { toast(e.message, "error"); } finally { setBusy(false); }
+  };
+  const revoke = async (id) => {
+    try { await api.revokeUploadLink(id); await load(); } catch (e) { toast(e.message, "error"); }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(fresh.url); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch {}
+  };
+
+  const fmtD = (t) => new Date(t).toLocaleDateString(lang === "ar" ? "ar-SA" : undefined);
+  // Amber/red reserved for status: expired/used-up = amber, revoked = red.
+  const stateColor = { active: T.emerald, expired: T.amber, used_up: T.amber, revoked: T.red };
+
+  return (
+    <div className="mt-3 rounded-lg p-3 space-y-3" style={{ background: T.panel, border: `1px solid ${T.line}` }}>
+      <div className="flex items-end gap-2 flex-wrap">
+        <div>
+          <FieldLbl>{tt(lang, "linkExpiry")}</FieldLbl>
+          <input type="number" min={1} max={30} value={expiresDays} onChange={(e) => setExpiresDays(e.target.value)}
+            dir="ltr" style={{ ...inputStyle, width: 90 }} className="raqib-focus" />
+        </div>
+        <div>
+          <FieldLbl>{tt(lang, "linkUses")}</FieldLbl>
+          <input type="number" min={1} max={100} value={maxUses} onChange={(e) => setMaxUses(e.target.value)}
+            dir="ltr" style={{ ...inputStyle, width: 90 }} className="raqib-focus" />
+        </div>
+        <button onClick={gen} disabled={busy}
+          className="rounded-lg px-3 py-2 text-xs font-bold inline-flex items-center gap-1.5 raqib-focus"
+          style={{ background: T.emerald, color: "#FFFFFF", opacity: busy ? 0.6 : 1 }}>
+          {busy ? <Loader2 size={12} className="raqib-spin" /> : <Upload size={12} />} {tt(lang, "genLink")}
+        </button>
+      </div>
+
+      {fresh && (
+        <div className="rounded-lg p-3 space-y-2" style={{ background: "rgba(22,143,91,0.07)", border: `1px solid ${T.emerald}` }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: T.emerald }}>{tt(lang, "linkOnce")}</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Mono style={{ fontSize: 11.5, color: T.ink, wordBreak: "break-all", flex: 1, minWidth: 200, background: "#FFFFFF", borderRadius: 6, padding: "6px 8px", border: `1px solid ${T.line}` }} dir="ltr">
+              {fresh.url}
+            </Mono>
+            <button onClick={copy} className="rounded-lg px-3 py-2 text-xs font-bold inline-flex items-center gap-1.5 raqib-focus"
+              style={{ background: T.emerald, color: "#FFFFFF" }}>
+              {copied ? <CheckCheck size={12} /> : <Copy size={12} />} {copied ? tt(lang, "copied") : tt(lang, "copyLink")}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: T.inkSoft }}>
+            {tt(lang, "dueLbl")}: <span dir="ltr">{fmtD(fresh.expiresAt)}</span> · {tt(lang, "linkUses")}: {fresh.maxUses}
+          </div>
+        </div>
+      )}
+
+      {links && links.length > 0 && (
+        <div className="space-y-1.5">
+          {links.map((l) => (
+            <div key={l.id} className="flex items-center gap-2 flex-wrap" style={{ fontSize: 11.5, color: T.inkSoft }}>
+              <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10, fontWeight: 700, background: `${stateColor[l.state] || T.na}1A`, color: stateColor[l.state] || T.na }}>
+                {tt(lang, "linkState")[l.state] || l.state}
+              </span>
+              <span dir="ltr">{fmtD(l.expiresAt)}</span>
+              <span>{tt(lang, "usesLeft", { n: Math.max(l.maxUses - l.usedCount, 0), m: l.maxUses })}</span>
+              <span style={{ color: T.inkFaint }}>{l.createdBy}</span>
+              {l.state === "active" && (
+                <button onClick={() => revoke(l.id)} className="rounded-md px-2 py-0.5 text-xs font-bold raqib-focus"
+                  style={{ background: "rgba(178,58,46,0.1)", color: T.red, marginInlineStart: "auto" }}>
+                  {tt(lang, "revoke")}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EvidenceView({ evidence, setEvidence, lang, user, allRowsByKey, goAdvisor, toast, versions }) {
   const list = Object.values(evidence).sort((a, b) => b.t - a.t);
   const QC = { strong: T.compliant, adequate: T.partial, weak: T.gap };
   const canManage = can(user.role, "evidence");
+  const canShare = can(user.role, "shareEvidence");
+  const [ctrlPop, setCtrlPop] = useState(null); // clicked control key
+  const [linksFor, setLinksFor] = useState(null); // evidence id with links panel open
 
   const remove = async (id) => {
     try {
@@ -2303,9 +2649,16 @@ function EvidenceView({ evidence, setEvidence, lang, user, allRowsByKey, goAdvis
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span dir="auto" style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{ev.name}</span>
-                    <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: `${QC[ev.quality]}1A`, color: QC[ev.quality] }}>
-                      {tt(lang, "evQuality")[ev.quality]}
-                    </span>
+                    {ev.quality && (
+                      <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: `${QC[ev.quality]}1A`, color: QC[ev.quality] }}>
+                        {tt(lang, "evQuality")[ev.quality]}
+                      </span>
+                    )}
+                    {ev.parentId && (
+                      <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: "rgba(22,143,91,0.1)", color: T.emerald }}>
+                        {tt(lang, "extUpload")}
+                      </span>
+                    )}
                     <span style={{ fontSize: 11, color: T.inkFaint }}>{ev.docType} · {ev.fileType} · {Math.round((ev.size || 0) / 1024)} KB</span>
                   </div>
                   <div dir="auto" style={{ fontSize: 13, color: T.inkSoft, marginTop: 4, lineHeight: 1.65 }}>{ev.summary}</div>
@@ -2313,11 +2666,12 @@ function EvidenceView({ evidence, setEvidence, lang, user, allRowsByKey, goAdvis
                     {(ev.controls || []).map((k) => {
                       const row = allRowsByKey.get(k);
                       return (
-                        <span key={k} title={row ? row.control.t : ""}>
-                          <Mono style={{ background: "rgba(17,64,47,0.08)", color: T.green, fontWeight: 700, borderRadius: 4, padding: "1px 6px", fontSize: 11 }}>
+                        <button key={k} title={row ? row.control.t : tt(lang, "ctrlNoMap")} onClick={() => setCtrlPop(k)}
+                          className="raqib-focus" style={{ padding: 0 }}>
+                          <Mono style={{ background: "rgba(22,143,91,0.1)", color: T.emerald, fontWeight: 700, borderRadius: 4, padding: "1px 6px", fontSize: 11, textDecoration: "underline dotted", textUnderlineOffset: 2, cursor: "pointer" }}>
                             {k.split(":")[1]}
                           </Mono>
-                        </span>
+                        </button>
                       );
                     })}
                     {!(ev.controls || []).length && <span style={{ fontSize: 11.5, color: T.inkFaint }}>{tt(lang, "noLinks")}</span>}
@@ -2326,16 +2680,32 @@ function EvidenceView({ evidence, setEvidence, lang, user, allRowsByKey, goAdvis
                     {ev.by} · <span dir="ltr">{new Date(ev.t).toLocaleString(lang === "ar" ? "ar-SA" : undefined)}</span>
                   </div>
                 </div>
-                {canManage && (
-                  <button onClick={() => remove(ev.id)} title={tt(lang, "deleteEv")}
-                    className="rounded-md p-1.5 raqib-focus" style={{ background: "rgba(178,58,46,0.08)", color: T.gap }}>
-                    <Trash2 size={14} />
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {canShare && (
+                    <button onClick={() => setLinksFor(linksFor === ev.id ? null : ev.id)} title={tt(lang, "uploadLinks")}
+                      className="rounded-md p-1.5 raqib-focus"
+                      style={{ background: linksFor === ev.id ? T.emerald : "rgba(22,143,91,0.1)", color: linksFor === ev.id ? "#FFFFFF" : T.emerald }}>
+                      <Upload size={14} />
+                    </button>
+                  )}
+                  {canManage && (
+                    <button onClick={() => remove(ev.id)} title={tt(lang, "deleteEv")}
+                      className="rounded-md p-1.5 raqib-focus" style={{ background: "rgba(178,58,46,0.08)", color: T.gap }}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
+              {canShare && linksFor === ev.id && (
+                <UploadLinksPanel evidenceId={ev.id} lang={lang} toast={toast} />
+              )}
             </Card>
           ))}
         </div>
+      )}
+      {ctrlPop && (
+        <ControlPopover keyStr={ctrlPop} row={allRowsByKey.get(ctrlPop) || null}
+          versions={versions} lang={lang} onClose={() => setCtrlPop(null)} />
       )}
     </div>
   );
@@ -2393,6 +2763,523 @@ function ApprovalsView({ allRows, assess, lang, onDecide }) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   CORRECTIVE ACTIONS (POA&M) — gap → owner → due date → evidence-of-fix →
+   closed. Rules live in api/_lib/poam.js (shared with the server route).
+══════════════════════════════════════════════════════════════════════════ */
+
+const ACT_STATUS_COLOR = (s) => (s === "Closed" ? T.emerald : s === "Blocked" ? T.amber : s === "In Progress" ? T.green : T.na);
+const PRIO_COLOR = { Low: T.na, Medium: T.inkSoft, High: T.amber, Critical: T.red };
+
+function ActionBadges({ a, lang }) {
+  const over = isOverdue(a);
+  const soon = !over && isDueSoon(a);
+  return (
+    <span className="inline-flex gap-1.5 items-center flex-wrap">
+      <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: `${ACT_STATUS_COLOR(a.status)}1A`, color: ACT_STATUS_COLOR(a.status) }}>
+        {tt(lang, "actStatus")[a.status] || a.status}
+      </span>
+      {a.closureRequested && a.status !== "Closed" && (
+        <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: "rgba(184,134,27,0.12)", color: T.amber }}>
+          {tt(lang, "closureRequested")}
+        </span>
+      )}
+      {over && (
+        <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: "rgba(178,58,46,0.12)", color: T.red }}>
+          {tt(lang, "overdueLbl")}
+        </span>
+      )}
+      {soon && (
+        <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10.5, fontWeight: 700, background: "rgba(184,134,27,0.12)", color: T.amber }}>
+          {tt(lang, "dueSoonLbl")}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* Create form (modal). Admin/Manager assign any active owner; an Assessor's
+   creations are owned by the assessor (server enforces the same). */
+function ActionForm({ user, owners, lang, prefillKeys, onCreate, onClose }) {
+  const [f, setF] = useState({
+    title: "", description: "", dueDate: "", priority: "Medium",
+    ownerUserId: user.id, linkedControlIds: prefillKeys || [],
+  });
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const assignable = canAssignOwner(user.role);
+  const ownerOpts = (owners || []).filter((o) => o.active && o.role !== "viewer");
+
+  const submit = async () => {
+    setErr("");
+    if (!f.title.trim()) return setErr(tt(lang, "actTitleLbl"));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.dueDate)) return setErr(tt(lang, "dueLbl"));
+    setBusy(true);
+    try { await onCreate(f); onClose(); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 95, background: "rgba(20,28,24,0.35)" }} onClick={onClose}>
+      <Card className="p-5 raqib-drawer w-full space-y-3" style={{ maxWidth: 520, background: "#FFFFFF", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{tt(lang, "newAction")}</div>
+          <button onClick={onClose} className="rounded-md p-1.5 raqib-focus" style={{ background: "rgba(0,0,0,0.05)" }}><X size={15} color={T.inkSoft} /></button>
+        </div>
+        <div>
+          <FieldLbl>{tt(lang, "actTitleLbl")}</FieldLbl>
+          <input value={f.title} onChange={(e) => setF((p) => ({ ...p, title: e.target.value }))} dir="auto" style={inputStyle} className="raqib-focus" />
+        </div>
+        <div>
+          <FieldLbl>{tt(lang, "actDescLbl")}</FieldLbl>
+          <textarea value={f.description} onChange={(e) => setF((p) => ({ ...p, description: e.target.value }))} rows={3} dir="auto"
+            style={{ ...inputStyle, resize: "vertical" }} className="raqib-focus" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <FieldLbl>{tt(lang, "owner")}</FieldLbl>
+            {assignable ? (
+              <select value={f.ownerUserId} onChange={(e) => setF((p) => ({ ...p, ownerUserId: e.target.value }))}
+                style={{ ...inputStyle, background: T.panel }} className="raqib-focus">
+                {ownerOpts.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            ) : (
+              <div className="rounded-lg px-3 py-2" style={{ ...inputStyle, background: T.panel, color: T.inkSoft }}>{user.name}</div>
+            )}
+          </div>
+          <div>
+            <FieldLbl>{tt(lang, "dueLbl")}</FieldLbl>
+            <input type="date" value={f.dueDate} onChange={(e) => setF((p) => ({ ...p, dueDate: e.target.value }))} style={inputStyle} className="raqib-focus" />
+          </div>
+          <div>
+            <FieldLbl>{tt(lang, "priorityLbl")}</FieldLbl>
+            <select value={f.priority} onChange={(e) => setF((p) => ({ ...p, priority: e.target.value }))}
+              style={{ ...inputStyle, background: T.panel }} className="raqib-focus">
+              {ACTION_PRIORITIES.map((p) => <option key={p} value={p}>{tt(lang, "actPriority")[p]}</option>)}
+            </select>
+          </div>
+        </div>
+        {f.linkedControlIds.length > 0 && (
+          <div>
+            <FieldLbl>{tt(lang, "linkControlsLbl")}</FieldLbl>
+            <div className="flex gap-1.5 flex-wrap">
+              {f.linkedControlIds.map((k) => (
+                <Mono key={k} style={{ background: "rgba(22,143,91,0.1)", color: T.emerald, fontWeight: 700, borderRadius: 4, padding: "1px 6px", fontSize: 11 }}>
+                  {k.split(":")[1] || k}
+                </Mono>
+              ))}
+            </div>
+          </div>
+        )}
+        {err && <div style={{ color: T.red, fontSize: 12.5 }}>{err}</div>}
+        <button onClick={submit} disabled={busy} className="w-full rounded-lg py-2.5 font-semibold raqib-focus"
+          style={{ background: T.emerald, color: "#FFFFFF", fontSize: 14, opacity: busy ? 0.6 : 1 }}>
+          {busy ? "…" : tt(lang, "createBtn")}
+        </button>
+      </Card>
+    </div>
+  );
+}
+
+/* Detail drawer: role-based field edit, link/unlink evidence, status timeline
+   from audit rows. Owner can request closure; only Admin/Manager close. */
+function ActionDrawer({ action, audit, owners, evidence, user, lang, onPatch, onArchive, onClose, toast }) {
+  const [note, setNote] = useState(action.closureNote || "");
+  const [busy, setBusy] = useState(false);
+  const isAr = lang === "ar";
+  const isOwner = action.ownerUserId === user.id;
+  const isCreator = action.createdBy === user.id;
+  const scope = actionEditScope(user.role, isOwner, isCreator);
+  const canEdit = scope !== "none" && action.status !== "Closed";
+  const managerial = isManagerial(user.role);
+  const trail = audit.filter((a) => a.actionId === action.id);
+  const evList = Object.values(evidence).sort((a, b) => b.t - a.t).slice(0, 40);
+  const linked = new Set(action.linkedEvidenceIds || []);
+  const ownerOpts = (owners || []).filter((o) => o.active && o.role !== "viewer");
+
+  const patch = async (p) => {
+    if (busy) return;
+    setBusy(true);
+    try { await onPatch(action.id, p); }
+    catch (e) { toast(e.message, "error"); }
+    finally { setBusy(false); }
+  };
+  const toggleEv = (id) => {
+    const next = new Set(linked);
+    next.has(id) ? next.delete(id) : next.add(id);
+    patch({ linkedEvidenceIds: [...next] });
+  };
+  const closeReady = closureGuard({ ...action, closureNote: note }, note).ok;
+
+  return (
+    <div className="fixed inset-0 flex justify-end" style={{ zIndex: 85, background: "rgba(20,28,24,0.35)" }} onClick={onClose}>
+      <div className="h-full overflow-y-auto raqib-drawer w-full" onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 470, background: T.panel, boxShadow: "0 0 40px rgba(15,25,20,0.3)" }}>
+        <div className="p-5" style={{ background: T.emerald }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div dir="auto" style={{ color: "#FFFFFF", fontSize: 17, fontWeight: 700, lineHeight: 1.4, textAlign: "start" }}>{action.title}</div>
+              <div className="mt-2"><ActionBadges a={action} lang={lang} /></div>
+              <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 6 }}>
+                {tt(lang, "owner")}: {action.ownerName || tt(lang, "unassigned")} · {tt(lang, "dueLbl")}: <span dir="ltr">{action.dueDate ? String(action.dueDate).slice(0, 10) : "—"}</span>
+                {" · "}<span style={{ fontWeight: 700 }}>{tt(lang, "actPriority")[action.priority]}</span>
+              </div>
+            </div>
+            <button onClick={onClose} className="rounded-md p-1.5 raqib-focus" style={{ background: "rgba(255,255,255,0.15)" }}>
+              <X size={16} color="#FFFFFF" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {scope === "none" && (
+            <div className="rounded-lg px-3 py-2 flex items-center gap-2" style={{ background: "rgba(184,134,27,0.1)", color: T.amber, fontSize: 12, fontWeight: 600 }}>
+              <Eye size={13} /> {tt(lang, "roViewer")}
+            </div>
+          )}
+
+          {action.description && (
+            <div dir="auto" style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.65, textAlign: "start" }}>{action.description}</div>
+          )}
+
+          {/* status transitions (legal + role-gated; Closed only via approve button below) */}
+          {canEdit && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>{tt(lang, "status")}</div>
+              <div className="flex gap-2 flex-wrap">
+                {ACTION_STATUSES.filter((s) => s !== "Closed").map((s) => {
+                  const allowed = canTransition(user.role, isOwner, action.status, s);
+                  return (
+                    <button key={s} disabled={!allowed || busy} onClick={() => patch({ status: s })}
+                      className="rounded-lg px-3 py-1.5 text-xs font-bold raqib-focus"
+                      style={{
+                        border: `1px solid ${action.status === s ? ACT_STATUS_COLOR(s) : T.line}`,
+                        background: action.status === s ? `${ACT_STATUS_COLOR(s)}14` : T.paper,
+                        color: action.status === s ? ACT_STATUS_COLOR(s) : allowed ? T.inkSoft : T.inkFaint,
+                        opacity: allowed ? 1 : 0.5, cursor: allowed ? "pointer" : "not-allowed",
+                      }}>
+                      {tt(lang, "actStatus")[s]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* owner / due / priority (managers; owner+creator per OWN_FIELDS) */}
+          {canEdit && (
+            <div className="grid grid-cols-2 gap-3">
+              {managerial && (
+                <div>
+                  <FieldLbl>{tt(lang, "owner")}</FieldLbl>
+                  <select value={action.ownerUserId || ""} disabled={busy}
+                    onChange={(e) => patch({ ownerUserId: e.target.value })}
+                    style={{ ...inputStyle, background: T.panel }} className="raqib-focus">
+                    {ownerOpts.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <FieldLbl>{tt(lang, "dueLbl")}</FieldLbl>
+                <input type="date" defaultValue={action.dueDate ? String(action.dueDate).slice(0, 10) : ""} disabled={busy}
+                  onBlur={(e) => e.target.value && e.target.value !== String(action.dueDate).slice(0, 10) && patch({ dueDate: e.target.value })}
+                  style={inputStyle} className="raqib-focus" />
+              </div>
+              <div>
+                <FieldLbl>{tt(lang, "priorityLbl")}</FieldLbl>
+                <select value={action.priority} disabled={busy} onChange={(e) => patch({ priority: e.target.value })}
+                  style={{ ...inputStyle, background: T.panel }} className="raqib-focus">
+                  {ACTION_PRIORITIES.map((p) => <option key={p} value={p}>{tt(lang, "actPriority")[p]}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* linked controls */}
+          {(action.linkedControlIds || []).length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>{tt(lang, "linkControlsLbl")}</div>
+              <div className="flex gap-1.5 flex-wrap">
+                {action.linkedControlIds.map((k) => (
+                  <Mono key={k} style={{ background: "rgba(22,143,91,0.1)", color: T.emerald, fontWeight: 700, borderRadius: 4, padding: "1px 6px", fontSize: 11 }}>
+                    {k.split(":")[1] || k}
+                  </Mono>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* link/unlink evidence-of-fix */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft, marginBottom: 6 }}>
+              <FileCheck2 size={12} style={{ display: "inline", marginInlineEnd: 5 }} color={T.emerald} />
+              {tt(lang, "linkEvidenceLbl")} ({(action.linkedEvidenceIds || []).length})
+            </div>
+            {evList.length === 0 ? (
+              <div style={{ fontSize: 12, color: T.inkFaint }}>{tt(lang, "evidenceEmpty")}</div>
+            ) : (
+              <div className="space-y-1" style={{ maxHeight: 180, overflowY: "auto" }}>
+                {evList.map((ev) => (
+                  <label key={ev.id} className="flex items-center gap-2 rounded-md px-2 py-1 raqib-row" style={{ fontSize: 12, cursor: canEdit ? "pointer" : "default" }}>
+                    <input type="checkbox" checked={linked.has(ev.id)} disabled={!canEdit || busy} onChange={() => toggleEv(ev.id)} />
+                    <span dir="auto" style={{ fontWeight: 600, color: T.ink }}>{ev.name}</span>
+                    <span style={{ color: T.inkFaint, fontSize: 11 }}>{ev.docType}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* closure workflow */}
+          <Card className="p-4 space-y-2">
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft }}>{tt(lang, "closureNoteLbl")}</div>
+            {action.status === "Closed" ? (
+              <>
+                <div dir="auto" style={{ fontSize: 12.5, color: T.ink, lineHeight: 1.6 }}>{action.closureNote}</div>
+                <div style={{ fontSize: 11.5, color: T.emerald, fontWeight: 600 }}>
+                  {tt(lang, "closedBadge")} · {action.closedBy} · <span dir="ltr">{action.closedAt ? new Date(action.closedAt).toLocaleString(isAr ? "ar-SA" : undefined) : ""}</span>
+                </div>
+                {managerial && (
+                  <button disabled={busy} onClick={() => patch({ status: "Open" })}
+                    className="rounded-lg px-3 py-1.5 text-xs font-bold raqib-focus" style={{ background: T.line, color: T.inkSoft }}>
+                    {tt(lang, "reopen")}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} dir="auto" disabled={scope === "none" || busy}
+                  placeholder={tt(lang, "closureNoteLbl")} style={{ ...inputStyle, resize: "vertical" }} className="raqib-focus" />
+                <div style={{ fontSize: 11.5, color: closeReady ? T.emerald : T.amber, fontWeight: 600 }}>
+                  {closeReady ? "✓" : "•"} {tt(lang, "closureNeeds")}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {canEdit && !managerial && (
+                    <button disabled={busy || action.closureRequested} onClick={() => patch({ closureNote: note, closureRequested: true })}
+                      className="rounded-lg px-3 py-1.5 text-xs font-bold raqib-focus"
+                      style={{ background: "rgba(184,134,27,0.12)", color: T.amber, opacity: action.closureRequested ? 0.5 : 1 }}>
+                      {action.closureRequested ? tt(lang, "closureRequested") : tt(lang, "requestClosure")}
+                    </button>
+                  )}
+                  {managerial && (
+                    <button disabled={busy || !closeReady} onClick={() => patch({ closureNote: note, status: "Closed" })}
+                      className="rounded-lg px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1.5 raqib-focus"
+                      style={{ background: closeReady ? T.emerald : T.line, color: closeReady ? "#FFFFFF" : T.inkFaint }}>
+                      <BadgeCheck size={12} /> {tt(lang, "approveClose")}
+                    </button>
+                  )}
+                  {canArchiveAction(user.role) && (
+                    <button disabled={busy} onClick={() => { onArchive(action.id); onClose(); }}
+                      className="rounded-lg px-3 py-1.5 text-xs font-semibold raqib-focus" style={{ background: "rgba(178,58,46,0.08)", color: T.red, marginInlineStart: "auto" }}>
+                      {tt(lang, "archiveBtn")}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </Card>
+
+          {/* timeline from audit rows */}
+          {trail.length > 0 && (
+            <Card className="p-4">
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSoft }}>
+                <History size={12} style={{ display: "inline", marginInlineEnd: 5 }} />{tt(lang, "timelineLbl")}
+              </div>
+              <div className="mt-2 space-y-1.5">
+                {trail.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2 flex-wrap" style={{ fontSize: 11.5, color: T.inkSoft }}>
+                    <Mono style={{ fontSize: 10.5, color: T.inkFaint }}>{a.field}</Mono>
+                    <span dir="auto">{a.from ?? "—"}</span>←<b style={{ color: T.ink }} dir="auto">{a.to ?? "—"}</b>
+                    <span style={{ color: T.inkFaint }}>· {a.by}</span>
+                    <span style={{ color: T.inkFaint, marginInlineStart: "auto" }} dir="ltr">{new Date(a.t).toLocaleString(isAr ? "ar-SA" : undefined)}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionsView({ user, lang, evidence, toast, prefillKey, clearPrefill }) {
+  const [data, setData] = useState(null); // { actions, audit, owners }
+  const [flt, setFlt] = useState({ owner: "", status: "", fw: "", overdue: false });
+  const [detailId, setDetailId] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const isAr = lang === "ar";
+
+  const load = useCallback(async () => {
+    try { setData(await api.listActions()); }
+    catch (e) { toast(e.message, "error"); }
+  }, [toast]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (prefillKey) setCreating(true); }, [prefillKey]);
+
+  const actions = data?.actions || [];
+  const fwOf = (a) => [...new Set((a.linkedControlIds || []).map((k) => String(k).split(":")[0]))];
+  const filtered = actions.filter((a) =>
+    (!flt.owner || a.ownerUserId === flt.owner) &&
+    (!flt.status || a.status === flt.status) &&
+    (!flt.fw || fwOf(a).includes(flt.fw)) &&
+    (!flt.overdue || isOverdue(a)));
+
+  const openCount = actions.filter((a) => a.status !== "Closed").length;
+  const overdueCount = actions.filter((a) => isOverdue(a)).length;
+  const byOwner = useMemo(() => {
+    const m = new Map();
+    for (const a of actions) if (a.status !== "Closed") m.set(a.ownerName || "—", (m.get(a.ownerName || "—") || 0) + 1);
+    return [...m.entries()].map(([name, n]) => ({ name, n })).sort((x, y) => y.n - x.n).slice(0, 8);
+  }, [actions]);
+  const byFw = useMemo(() => {
+    const m = new Map();
+    for (const a of actions) if (a.status !== "Closed") for (const f of fwOf(a)) m.set(FRAMEWORKS[f]?.short || f, (m.get(FRAMEWORKS[f]?.short || f) || 0) + 1);
+    return [...m.entries()].map(([name, n]) => ({ name, n }));
+  }, [actions]);
+
+  const create = async (f) => {
+    await api.createAction({ ...f, linkedControlIds: f.linkedControlIds });
+    await load();
+    toast(tt(lang, "toastAction"));
+  };
+  const patchOne = async (id, p) => {
+    const { action } = await api.patchAction(id, p);
+    setData((d) => d ? { ...d, actions: d.actions.map((a) => (a.id === id ? action : a)) } : d);
+    load(); // refresh audit trail
+  };
+  const archive = async (id) => {
+    try { await api.archiveAction(id); await load(); } catch (e) { toast(e.message, "error"); }
+  };
+
+  const detail = detailId ? actions.find((a) => a.id === detailId) : null;
+  const owners = data?.owners || [];
+
+  return (
+    <div className="p-4 md:p-6 space-y-4">
+      <div className="flex items-end justify-between flex-wrap gap-3 raqib-rise">
+        <div>
+          <Eyebrow ar="خطط المعالجة" en="Remediation · POA&M" lang={lang} />
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: T.ink, marginTop: 4 }}>{tt(lang, "poamTitle")}</h1>
+        </div>
+        {canCreateAction(user.role) && (
+          <button onClick={() => setCreating(true)}
+            className="rounded-lg px-4 py-2 text-sm font-semibold inline-flex items-center gap-2 raqib-focus"
+            style={{ background: T.emerald, color: "#FFFFFF" }}>
+            <ListTodo size={14} /> {tt(lang, "newAction")}
+          </button>
+        )}
+      </div>
+
+      {/* rollup */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="p-4">
+          <div style={{ fontSize: 26, fontWeight: 700, color: T.emerald }}>{openCount}</div>
+          <div style={{ fontSize: 11.5, color: T.inkFaint, fontWeight: 600 }}>{tt(lang, "openCount")}</div>
+        </Card>
+        <Card className="p-4">
+          <div style={{ fontSize: 26, fontWeight: 700, color: overdueCount ? T.red : T.emerald }}>{overdueCount}</div>
+          <div style={{ fontSize: 11.5, color: T.inkFaint, fontWeight: 600 }}>{tt(lang, "overdueLbl")}</div>
+        </Card>
+        <Card className="p-4">
+          <div style={{ fontSize: 11.5, color: T.inkFaint, fontWeight: 600, marginBottom: 4 }}>{tt(lang, "byOwner")}</div>
+          <ResponsiveContainer width="100%" height={70}>
+            <BarChart data={byOwner} layout="vertical" margin={{ top: 0, right: 6, bottom: 0, left: 0 }}>
+              <XAxis type="number" hide />
+              <YAxis type="category" dataKey="name" width={70} tick={{ fontSize: 9, fill: T.inkFaint }} axisLine={false} tickLine={false} />
+              <Bar dataKey="n" fill={T.emerald} radius={[0, 3, 3, 0]} barSize={8} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card className="p-4">
+          <div style={{ fontSize: 11.5, color: T.inkFaint, fontWeight: 600, marginBottom: 4 }}>{tt(lang, "byFramework")}</div>
+          <ResponsiveContainer width="100%" height={70}>
+            <BarChart data={byFw} layout="vertical" margin={{ top: 0, right: 6, bottom: 0, left: 0 }}>
+              <XAxis type="number" hide />
+              <YAxis type="category" dataKey="name" width={70} tick={{ fontSize: 9, fill: T.inkFaint }} axisLine={false} tickLine={false} />
+              <Bar dataKey="n" fill={T.green} radius={[0, 3, 3, 0]} barSize={8} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* filters */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <select value={flt.owner} onChange={(e) => setFlt((p) => ({ ...p, owner: e.target.value }))}
+          style={{ ...inputStyle, width: "auto", background: T.panel }} className="raqib-focus">
+          <option value="">{tt(lang, "allOwners")}</option>
+          {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+        <select value={flt.status} onChange={(e) => setFlt((p) => ({ ...p, status: e.target.value }))}
+          style={{ ...inputStyle, width: "auto", background: T.panel }} className="raqib-focus">
+          <option value="">{tt(lang, "allSt")}</option>
+          {ACTION_STATUSES.map((s) => <option key={s} value={s}>{tt(lang, "actStatus")[s]}</option>)}
+        </select>
+        <select value={flt.fw} onChange={(e) => setFlt((p) => ({ ...p, fw: e.target.value }))}
+          style={{ ...inputStyle, width: "auto", background: T.panel }} className="raqib-focus">
+          <option value="">{tt(lang, "allFw")}</option>
+          {Object.keys(FRAMEWORKS).map((f) => <option key={f} value={f}>{FRAMEWORKS[f].short}</option>)}
+        </select>
+        <label className="flex items-center gap-1.5" style={{ fontSize: 12.5, color: T.inkSoft, fontWeight: 600, cursor: "pointer" }}>
+          <input type="checkbox" checked={flt.overdue} onChange={(e) => setFlt((p) => ({ ...p, overdue: e.target.checked }))} />
+          {tt(lang, "onlyOverdue")}
+        </label>
+      </div>
+
+      {/* table */}
+      {filtered.length === 0 ? (
+        <Card className="p-8 text-center" style={{ color: T.inkFaint, fontSize: 13 }}>{tt(lang, "noActions")}</Card>
+      ) : (
+        <Card className="p-0" style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 640 }}>
+            <thead>
+              <tr>
+                {[tt(lang, "actTitleLbl"), tt(lang, "owner"), tt(lang, "priorityLbl"), tt(lang, "dueLbl"), tt(lang, "status"), tt(lang, "linkEvidenceLbl")].map((h) => (
+                  <th key={h} style={{ textAlign: "start", padding: "9px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.inkFaint, borderBottom: `1px solid ${T.line}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((a) => (
+                <tr key={a.id} className="raqib-row" style={{ cursor: "pointer" }} onClick={() => setDetailId(a.id)}>
+                  <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.line}` }}>
+                    <div dir="auto" style={{ fontSize: 13, fontWeight: 600, color: T.ink, textAlign: "start" }}>{a.title}</div>
+                    <div className="flex gap-1 flex-wrap mt-0.5">
+                      {(a.linkedControlIds || []).slice(0, 4).map((k) => (
+                        <Mono key={k} style={{ fontSize: 10, color: T.emerald, fontWeight: 700 }}>{k.split(":")[1] || k}</Mono>
+                      ))}
+                    </div>
+                  </td>
+                  <td dir="auto" style={{ padding: "9px 12px", fontSize: 12.5, color: T.inkSoft, borderBottom: `1px solid ${T.line}` }}>{a.ownerName || tt(lang, "unassigned")}</td>
+                  <td style={{ padding: "9px 12px", fontSize: 12, fontWeight: 700, color: PRIO_COLOR[a.priority] || T.inkSoft, borderBottom: `1px solid ${T.line}` }}>{tt(lang, "actPriority")[a.priority]}</td>
+                  <td dir="ltr" style={{ padding: "9px 12px", fontSize: 12, color: isOverdue(a) ? T.red : isDueSoon(a) ? T.amber : T.inkSoft, fontWeight: isOverdue(a) || isDueSoon(a) ? 700 : 400, borderBottom: `1px solid ${T.line}` }}>
+                    {a.dueDate ? String(a.dueDate).slice(0, 10) : "—"}
+                  </td>
+                  <td style={{ padding: "9px 12px", borderBottom: `1px solid ${T.line}` }}><ActionBadges a={a} lang={lang} /></td>
+                  <td style={{ padding: "9px 12px", fontSize: 12.5, color: (a.linkedEvidenceIds || []).length ? T.emerald : T.inkFaint, fontWeight: 700, borderBottom: `1px solid ${T.line}` }}>
+                    {(a.linkedEvidenceIds || []).length}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      {creating && (
+        <ActionForm user={user} owners={owners} lang={lang} prefillKeys={prefillKey ? [prefillKey] : []}
+          onCreate={create} onClose={() => { setCreating(false); clearPrefill(); }} />
+      )}
+      {detail && (
+        <ActionDrawer action={detail} audit={data?.audit || []} owners={owners} evidence={evidence}
+          user={user} lang={lang} onPatch={patchOne} onArchive={archive} toast={toast}
+          onClose={() => setDetailId(null)} />
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    USERS (admin)
 ══════════════════════════════════════════════════════════════════════════ */
 
@@ -2401,6 +3288,7 @@ function UsersView({ users, lang, currentUser, onAdd, onToggleActive, onResetPw,
   const [err, setErr] = useState("");
   const [pwFor, setPwFor] = useState(null);
   const [newPw, setNewPw] = useState("");
+  const [confirmFor, setConfirmFor] = useState(null); // deactivation needs an explicit confirm step
   const list = Object.values(users).sort((a, b) => a.t - b.t);
 
   const submit = async () => {
@@ -2468,7 +3356,7 @@ function UsersView({ users, lang, currentUser, onAdd, onToggleActive, onResetPw,
                     style={{ background: "rgba(168,123,34,0.12)", color: T.brass }}>
                     {tt(lang, "resetPw")}
                   </button>
-                  <button onClick={() => onToggleActive(u.id)}
+                  <button onClick={() => (u.active ? setConfirmFor(confirmFor === u.id ? null : u.id) : onToggleActive(u.id))}
                     className="rounded-lg px-3 py-1.5 text-xs font-semibold raqib-focus"
                     style={{ background: u.active ? "rgba(178,58,46,0.1)" : "rgba(31,122,77,0.1)", color: u.active ? T.gap : T.compliant }}>
                     {u.active ? tt(lang, "deactivate") : tt(lang, "activate")}
@@ -2476,6 +3364,17 @@ function UsersView({ users, lang, currentUser, onAdd, onToggleActive, onResetPw,
                 </div>
               )}
             </div>
+            {confirmFor === u.id && u.active && (
+              <div className="flex gap-2 mt-3 items-center flex-wrap">
+                <span style={{ fontSize: 12.5, color: T.gap, fontWeight: 600 }}>{tt(lang, "removeConfirm", { n: u.name })}</span>
+                <button onClick={async () => { await onToggleActive(u.id); setConfirmFor(null); }}
+                  className="rounded-lg px-3 py-1.5 text-xs font-bold raqib-focus" style={{ background: T.gap, color: "#FFF" }}>
+                  {tt(lang, "confirm")}
+                </button>
+                <button onClick={() => setConfirmFor(null)} className="rounded-lg px-3 py-1.5 text-xs font-semibold raqib-focus"
+                  style={{ background: T.line, color: T.inkSoft }}>{tt(lang, "cancel")}</button>
+              </div>
+            )}
             {pwFor === u.id && (
               <div className="flex gap-2 mt-3 flex-wrap">
                 <input value={newPw} onChange={(e) => setNewPw(e.target.value)} type="password" dir="ltr"
@@ -2563,6 +3462,52 @@ function RiskView({ allRows, assess, onOpenControls, lang }) {
 /* ════════════════════════════════════════════════════════════════════════
    SETTINGS + DIAGNOSTICS
 ══════════════════════════════════════════════════════════════════════════ */
+
+/* Self-service password change: requires the CURRENT password (server-enforced
+   in /api/auth?action=change-password); available to every signed-in role. */
+function PasswordSection({ lang, toast }) {
+  const [cur, setCur] = useState("");
+  const [nw, setNw] = useState("");
+  const [nw2, setNw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async () => {
+    setErr("");
+    if (nw.length < 8) return setErr(tt(lang, "pwShort"));
+    if (nw !== nw2) return setErr(tt(lang, "pwMismatch"));
+    setBusy(true);
+    try {
+      await api.changePassword(cur, nw);
+      setCur(""); setNw(""); setNw2("");
+      toast(tt(lang, "pwChanged"));
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Card className="p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <KeyRound size={15} color={T.emerald} />
+        <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{tt(lang, "pwChangeTitle")}</div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input value={cur} onChange={(e) => setCur(e.target.value)} type="password" dir="ltr" autoComplete="current-password"
+          placeholder={tt(lang, "pwCurrentLbl")} style={inputStyle} className="raqib-focus" />
+        <input value={nw} onChange={(e) => setNw(e.target.value)} type="password" dir="ltr" autoComplete="new-password"
+          placeholder={tt(lang, "pwNewLbl")} style={inputStyle} className="raqib-focus" />
+        <input value={nw2} onChange={(e) => setNw2(e.target.value)} type="password" dir="ltr" autoComplete="new-password"
+          placeholder={tt(lang, "pw2Lbl")} style={inputStyle} className="raqib-focus"
+          onKeyDown={(e) => e.key === "Enter" && submit()} />
+      </div>
+      {err && <div style={{ color: T.gap, fontSize: 12.5 }}>{err}</div>}
+      <button onClick={submit} disabled={busy || !cur || !nw || !nw2}
+        className="rounded-lg px-4 py-2 text-sm font-semibold inline-flex items-center gap-2 raqib-focus"
+        style={{ background: T.emerald, color: "#FFFFFF", opacity: busy || !cur || !nw || !nw2 ? 0.6 : 1 }}>
+        {busy ? <Loader2 size={14} className="raqib-spin" /> : <KeyRound size={14} />} {tt(lang, "pwChangeTitle")}
+      </button>
+    </Card>
+  );
+}
 
 function MfaSection({ lang, mfaEnabled, onChanged, toast }) {
   const L = (ar, en) => (lang === "ar" ? ar : en);
@@ -2703,6 +3648,7 @@ function SettingsView({ settings, catalogs, onRescope, onRefreshCatalogs, onRese
         )}
         <div style={{ fontSize: 12, color: T.inkFaint }}>{tt(lang, "refetchNote")}</div>
       </Card>
+      <PasswordSection lang={lang} toast={toast} />
       <MfaSection lang={lang} mfaEnabled={user.mfaEnabled} onChanged={onMfaChanged} toast={toast} />
       <Card className="p-5 space-y-3">
         <div style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{tt(lang, "auditData")}</div>
@@ -2838,6 +3784,7 @@ const NAV = [
   { id: "controls", Icon: ListChecks },
   { id: "risk", Icon: Flame },
   { id: "evidence", Icon: FileCheck2 },
+  { id: "actions", Icon: ListTodo }, // POA&M — every role; viewer is read-only
   { id: "approvals", Icon: ClipboardCheck, need: "approve" },
   { id: "advisor", Icon: Sparkles },
   { id: "users", Icon: UsersIcon, need: "manageUsers" },
@@ -2860,7 +3807,9 @@ export default function App() {
   const [progress, setProgress] = useState({ pct: 0, label: "", done: 0, total: 0, kind: "discover" });
   const [loadError, setLoadError] = useState(null);
   const [advisorMsgs, setAdvisorMsgsRaw] = useState([]);
+  const [advisorCid, setAdvisorCid] = useState(null);
   const [pendingControl, setPendingControl] = useState(null);
+  const [actionsPrefill, setActionsPrefill] = useState(null); // control key pre-linked into a new corrective action
   const [drawerRow, setDrawerRow] = useState(null);
   const [toasts, setToasts] = useState([]);
   const timers = useRef({});
@@ -2877,9 +3826,31 @@ export default function App() {
     try { localStorage.setItem("raqib:lang", l); } catch {}
   }, []);
 
-  // Advisor thread + per-control guidance are kept in memory for the session.
+  // Advisor thread renders from memory but is persisted server-side per
+  // conversation id (survives reload); per-control guidance stays in memory.
   const setAdvisorMsgs = useCallback((updater) => setAdvisorMsgsRaw(updater), []);
   const setEvidence = useCallback((updater) => setEvidenceRaw(updater), []);
+
+  const newCid = () => (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`);
+  useEffect(() => {
+    if (!currentUser) { setAdvisorCid(null); return; }
+    const k = `raqib:cid:${currentUser.id}`;
+    let c = null;
+    try { c = localStorage.getItem(k); } catch {}
+    if (!c || !/^[A-Za-z0-9_-]{8,64}$/.test(c)) {
+      c = newCid();
+      try { localStorage.setItem(k, c); } catch {}
+    }
+    setAdvisorCid(c);
+  }, [currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const newAdvisorThread = useCallback(async () => {
+    if (advisorCid) { try { await api.advisorClear(advisorCid); } catch { /* stale rows are harmless */ } }
+    const c = newCid();
+    if (currentUser) { try { localStorage.setItem(`raqib:cid:${currentUser.id}`, c); } catch {} }
+    setAdvisorCid(c);
+    setAdvisorMsgsRaw([]);
+  }, [advisorCid, currentUser]);
 
   // Reload the authoritative workspace from the server (used to recover from a write error).
   const reloadWorkspace = useCallback(async () => {
@@ -3135,8 +4106,11 @@ export default function App() {
   }, [lang, toast, refreshUsers]);
 
   const toggleActive = useCallback(async (id) => {
-    try { const { user } = await api.patchUser({ id, active: !users[id]?.active }); setUsers((p) => ({ ...p, [id]: { ...p[id], ...user } })); }
-    catch (e) { toast(e.message, "error"); }
+    try {
+      // Removal is a soft-delete: DELETE /api/users deactivates (records survive).
+      const { user } = users[id]?.active ? await api.removeUser(id) : await api.patchUser({ id, active: true });
+      setUsers((p) => ({ ...p, [id]: { ...p[id], ...user } }));
+    } catch (e) { toast(e.message, "error"); }
   }, [users, toast]);
 
   const resetPw = useCallback(async (id, password) => {
@@ -3227,7 +4201,8 @@ export default function App() {
       {drawerRow && (
         <ControlDrawer row={drawerRow} assess={assess} audit={audit} guidance={guidance} lang={lang}
           evidence={evidence} user={currentUser}
-          onSave={saveDrawer} onClose={() => setDrawerRow(null)} onGuidance={genGuidance} onAskAI={askAI} />
+          onSave={saveDrawer} onClose={() => setDrawerRow(null)} onGuidance={genGuidance} onAskAI={askAI}
+          onCreateAction={(r) => { setDrawerRow(null); setActionsPrefill(r.key); setView("actions"); }} />
       )}
 
       <aside className="flex flex-col items-stretch flex-shrink-0 w-16 md:w-52" style={{ background: T.green }}>
@@ -3296,9 +4271,13 @@ export default function App() {
             onOpen={setDrawerRow} />
         )}
         {view === "risk" && <RiskView allRows={allRows} assess={assess} lang={lang} onOpenControls={() => setView("controls")} />}
+        {view === "actions" && (
+          <ActionsView user={currentUser} lang={lang} evidence={evidence} toast={toast}
+            prefillKey={actionsPrefill} clearPrefill={() => setActionsPrefill(null)} />
+        )}
         {view === "evidence" && (
           <EvidenceView evidence={evidence} setEvidence={setEvidence} lang={lang} user={currentUser}
-            allRowsByKey={allRowsByKey} goAdvisor={() => setView("advisor")} toast={toast} />
+            allRowsByKey={allRowsByKey} goAdvisor={() => setView("advisor")} toast={toast} versions={versions} />
         )}
         {view === "approvals" && can(currentUser.role, "approve") && (
           <ApprovalsView allRows={allRows} assess={assess} lang={lang} onDecide={decideApproval} />
@@ -3308,7 +4287,8 @@ export default function App() {
             pendingControl={pendingControl} clearPending={() => setPendingControl(null)}
             org={settings.org} selected={selected} toast={toast} postureSummary={postureSummary}
             versions={versions} onEvidence={onEvidence} validKeysByFw={validKeysByFw}
-            user={currentUser} goEvidence={() => setView("evidence")} />
+            user={currentUser} goEvidence={() => setView("evidence")}
+            cid={advisorCid} onNewThread={newAdvisorThread} />
         )}
         {view === "users" && can(currentUser.role, "manageUsers") && (
           <UsersView users={users} lang={lang} currentUser={currentUser}
@@ -3322,6 +4302,136 @@ export default function App() {
             onReset={resetAll} />
         )}
       </main>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PUBLIC UPLOAD PAGE — /u/<token> · no login, no registration, no app shell.
+   Shows only the target item's TITLE; can only submit to that item.
+══════════════════════════════════════════════════════════════════════════ */
+
+const PUB_ACCEPT = ".pdf,.png,.jpg,.jpeg,.zip,.csv,.log,.txt";
+
+export function PublicUploadPage({ token }) {
+  const lang = typeof navigator !== "undefined" && String(navigator.language || "").startsWith("ar") ? "ar" : "en";
+  const dir = lang === "ar" ? "rtl" : "ltr";
+  const [phase, setPhase] = useState("loading"); // loading | ready | sending | done | invalid
+  const [info, setInfo] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [name, setName] = useState("");
+  const [note, setNote] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try { setInfo(await api.publicUploadInfo(token)); setPhase("ready"); }
+      catch { setPhase("invalid"); }
+    })();
+  }, [token]);
+
+  const maxFiles = info?.maxFiles || 3;
+  const maxMb = Math.round((info?.maxBytes || 4 * 1024 * 1024) / 1024 / 1024);
+
+  const onPick = (e) => {
+    setErr("");
+    setFiles(Array.from(e.target.files || []).slice(0, maxFiles));
+    e.target.value = "";
+  };
+
+  const submit = async () => {
+    if (!files.length || phase === "sending") return;
+    setErr(""); setPhase("sending");
+    try {
+      const payload = [];
+      for (const f of files) {
+        const ext = (f.name.toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || "";
+        const entry = { name: f.name, size: f.size };
+        if (["pdf", "png", "jpg", "jpeg"].includes(ext)) entry.data = await readFileAs(f, "b64");
+        else if (["csv", "log", "txt"].includes(ext)) entry.text = (await readFileAs(f, "text")).slice(0, 24000);
+        if (["png", "jpg", "jpeg"].includes(ext)) entry.mime = f.type || (ext === "png" ? "image/png" : "image/jpeg");
+        payload.push(entry); // zip: metadata only — bytes are never retained anyway
+      }
+      await api.publicUpload(token, { name: name.trim(), note: note.trim(), files: payload });
+      setPhase("done");
+    } catch (e) {
+      if (e.status === 410) { setPhase("invalid"); return; }
+      setErr(e.message || "Upload failed");
+      setPhase("ready");
+    }
+  };
+
+  return (
+    <div dir={dir} className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: T.paper, fontFamily: fontFor(lang) }}>
+      <GlobalStyle />
+      <div className="w-full rounded-2xl p-6 space-y-4" style={{ maxWidth: 460, background: "#FFFFFF", border: `1px solid ${T.line}`, boxShadow: "0 10px 34px rgba(20,30,25,0.08)" }}>
+        <div className="flex items-center gap-2">
+          <div style={{ fontFamily: "'IBM Plex Sans Arabic'", color: T.emerald, fontSize: 20, fontWeight: 700 }}>برهان</div>
+          <div style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: T.inkFaint, fontWeight: 700 }}>Burhan GRC</div>
+        </div>
+
+        {phase === "loading" && (
+          <div className="flex items-center gap-2" style={{ color: T.inkFaint, fontSize: 13 }}>
+            <Loader2 size={15} className="raqib-spin" /> …
+          </div>
+        )}
+
+        {phase === "invalid" && (
+          <div className="rounded-lg p-4" style={{ background: "rgba(178,58,46,0.07)", border: "1px solid rgba(178,58,46,0.3)", color: T.red, fontSize: 13.5, fontWeight: 600 }}>
+            {tt(lang, "pubInvalid")}
+          </div>
+        )}
+
+        {phase === "done" && (
+          <div className="rounded-lg p-4 flex items-center gap-2" style={{ background: "rgba(22,143,91,0.08)", border: `1px solid ${T.emerald}`, color: T.emerald, fontSize: 13.5, fontWeight: 600 }}>
+            <CheckCheck size={16} /> {tt(lang, "pubDone")}
+          </div>
+        )}
+
+        {(phase === "ready" || phase === "sending") && info && (
+          <>
+            <div>
+              <h1 style={{ fontSize: 19, fontWeight: 700, color: T.ink, margin: 0 }}>{tt(lang, "pubUploadTitle")}</h1>
+              <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 6 }}>{tt(lang, "pubUploadFor")}</div>
+              <div dir="auto" className="rounded-lg px-3 py-2 mt-1" style={{ background: T.panel, border: `1px solid ${T.line}`, fontSize: 13.5, fontWeight: 700, color: T.ink }}>
+                {info.title}
+              </div>
+            </div>
+            <input value={name} onChange={(e) => setName(e.target.value)} dir="auto"
+              placeholder={tt(lang, "pubYourName")} style={inputStyle} className="raqib-focus" />
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} dir="auto"
+              placeholder={tt(lang, "pubNote")} style={{ ...inputStyle, resize: "vertical" }} className="raqib-focus" />
+            <div>
+              <input id="pub-files" type="file" multiple accept={PUB_ACCEPT} onChange={onPick} style={{ display: "none" }} />
+              <label htmlFor="pub-files" className="rounded-lg px-4 py-2.5 text-sm font-semibold inline-flex items-center gap-2 raqib-focus"
+                style={{ background: "rgba(22,143,91,0.1)", color: T.emerald, cursor: "pointer" }}>
+                <Paperclip size={14} /> {tt(lang, "attach")}
+              </label>
+              <div style={{ fontSize: 11, color: T.inkFaint, marginTop: 6 }}>
+                {tt(lang, "pubLimits", { ext: (info.accept || []).join(", "), mb: maxMb, n: maxFiles })}
+              </div>
+              {files.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {files.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2" style={{ fontSize: 12.5, color: T.inkSoft }}>
+                      <FileText size={13} color={T.emerald} />
+                      <span dir="auto" style={{ fontWeight: 600, color: T.ink }}>{f.name}</span>
+                      <span style={{ color: T.inkFaint }}>{Math.round(f.size / 1024)} KB</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {err && <div style={{ color: T.red, fontSize: 12.5, fontWeight: 600 }}>{err}</div>}
+            <button onClick={submit} disabled={!files.length || phase === "sending"}
+              className="w-full rounded-lg py-2.5 font-semibold inline-flex items-center justify-center gap-2 raqib-focus"
+              style={{ background: files.length && phase !== "sending" ? T.emerald : T.line, color: files.length && phase !== "sending" ? "#FFFFFF" : T.inkFaint, fontSize: 14 }}>
+              {phase === "sending" ? <Loader2 size={15} className="raqib-spin" /> : <Upload size={15} />} {tt(lang, "pubSubmit")}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
