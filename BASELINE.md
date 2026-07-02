@@ -285,6 +285,12 @@ limiting anywhere.
   in-memory rate limits (per serverless instance — best effort; the DB
   `used_count`/`max_uses` is the authoritative brake; noted here as the
   serverless trade-off).
+- **Follow-up (user request):** links can also be generated BEFORE any
+  evidence exists — "Generate upload link" buttons in the Evidence Registry
+  header and the Advisor header open a modal that takes a title and creates a
+  placeholder registry item (docType `request`); external uploads attach to
+  it. The one-token-one-item scope guarantee is unchanged. The original
+  per-item link panel remains for existing items.
 - Public page `/u/<token>`: minimal, no login/registration/app shell —
   item title, optional name + note, file picker, submit; invalid/expired/
   used links get a clear red state. Registry panel lists links with

@@ -13,7 +13,7 @@ import {
 import { analyzeEvidence } from "./_lib/anthropic.js";
 import { loadContext } from "./_lib/context.js";
 import { randomId } from "./_lib/crypto.js";
-import { newUploadToken, hashUploadToken, normalizeLinkOptions, tokenState } from "./_lib/uploads.js";
+import { newUploadToken, hashUploadToken, normalizeLinkOptions, tokenState, makeRequestEvidence } from "./_lib/uploads.js";
 
 const KINDS = { pdf: 1, image: 1, text: 1 };
 const SOFT_DEADLINE_MS = 30000; // Pro: 60s function limit, generous headroom
@@ -68,16 +68,29 @@ export default route({
 
     if (action === "link-create") {
       const user = await requirePerm(req, "shareEvidence");
-      const { evidenceId, expiresDays, maxUses } = await readJson(req);
-      const item = await evidenceById(String(evidenceId || ""));
-      if (!item) throw httpError(404, "Evidence item not found");
+      const { evidenceId, title, expiresDays, maxUses } = await readJson(req);
+      // Two entry points: an existing item, or a fresh request (title only) —
+      // the latter creates a placeholder registry item the uploads attach to.
+      let item = null, created = null;
+      if (evidenceId) {
+        item = await evidenceById(String(evidenceId));
+        if (!item) throw httpError(404, "Evidence item not found");
+      } else {
+        created = makeRequestEvidence(title, user.name);
+        if (!created) throw httpError(400, "Title required");
+        await insertEvidence(created);
+        item = { ...created, t: Date.now() };
+      }
       const opts = normalizeLinkOptions({ expiresDays, maxUses });
       const raw = newUploadToken();
       const id = randomId("lnk");
       const expiresAt = new Date(Date.now() + opts.expiresDays * 24 * 60 * 60 * 1000).toISOString();
       await insertUploadToken({ id, evidenceItemId: item.id, tokenHash: hashUploadToken(raw), createdBy: user.name, expiresAt, maxUses: opts.maxUses });
       // The raw token is returned exactly once; only its hash is persisted.
-      return send(res, 201, { link: { id, token: raw, evidenceId: item.id, expiresAt: new Date(expiresAt).getTime(), maxUses: opts.maxUses, expiresDays: opts.expiresDays } });
+      return send(res, 201, {
+        link: { id, token: raw, evidenceId: item.id, expiresAt: new Date(expiresAt).getTime(), maxUses: opts.maxUses, expiresDays: opts.expiresDays },
+        ...(created ? { evidence: item } : {}),
+      });
     }
 
     if (action === "link-revoke") {

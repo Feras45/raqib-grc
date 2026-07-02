@@ -46,7 +46,8 @@ export const api = {
   analyzeEvidence: (file, conversationId) => req("POST", "/api/evidence?action=analyze", { file, conversationId }),
   deleteEvidence: (id) => req("DELETE", "/api/evidence", { id }),
   // evidence upload links (share with external uploaders)
-  createUploadLink: (evidenceId, expiresDays, maxUses) => req("POST", "/api/evidence?action=link-create", { evidenceId, expiresDays, maxUses }),
+  // pass { evidenceId } for an existing item, or { title } to create a fresh evidence request
+  createUploadLink: (params) => req("POST", "/api/evidence?action=link-create", params),
   listUploadLinks: (evidenceId) => req("GET", `/api/evidence?action=links${evidenceId ? `&evidenceId=${encodeURIComponent(evidenceId)}` : ""}`),
   revokeUploadLink: (id) => req("POST", "/api/evidence?action=link-revoke", { id }),
   // public upload page (no session)
