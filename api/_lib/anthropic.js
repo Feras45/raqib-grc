@@ -21,6 +21,46 @@ export async function callClaude({ messages, system, maxTokens = 1000, search = 
   return (data.content || []).map((b) => (b.type === "text" ? b.text : "")).filter(Boolean).join("\n");
 }
 
+/* Streaming variant: parses Anthropic SSE and invokes onText per text delta.
+   Returns the full accumulated text. Used by the Advisor for real-time chat. */
+export async function streamClaude({ messages, system, maxTokens = 1000, model = MODEL, onText }) {
+  const body = { model, max_tokens: maxTokens, system: system || "", messages, stream: true };
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": KEY(), "anthropic-version": "2023-06-01" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw httpError(res.status === 429 ? 429 : 502, `Anthropic API ${res.status}`, txt.slice(0, 300));
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload) continue;
+      let ev;
+      try { ev = JSON.parse(payload); } catch { continue; }
+      if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta.text) {
+        full += ev.delta.text;
+        if (onText) onText(ev.delta.text, full);
+      } else if (ev.type === "error") {
+        throw httpError(502, ev.error?.message || "Stream error");
+      }
+    }
+  }
+  return full;
+}
+
 /* Two-phase catalog build (official-source discovery → parallel domain fetch). */
 export async function fetchCatalogs(frameworks, force, existing = {}) {
   const result = {};
@@ -66,11 +106,18 @@ export async function analyzeEvidence({ file, selected, versions, validKeysByFw,
   return normalizeEvidence(parsed, validKeysByFw, { name: file.name, kind: file.kind, size: file.size }, userName);
 }
 
-export function advisorSystem({ org, selected, posture, userLang, versions }) {
+export function advisorSystem({ org, selected, posture, userLang, versions, replyLang }) {
   const scope = selected.map((f) => `${FRAMEWORKS[f].short} ${(versions && versions[f]) || ""}`.trim()).join(" and ");
+  // Deterministic when the caller detected the question's language (any Arabic
+  // in the question — including mixed Arabic/English — forces Arabic).
+  const langRule = replyLang === "ar"
+    ? `LANGUAGE RULE: Reply ENTIRELY in Arabic — formal MSA with correct Saudi regulatory terminology (الهيئة الوطنية للأمن السيبراني, الضوابط الأساسية للأمن السيبراني, البنك المركزي السعودي, إطار الأمن السيبراني). The user's message may mix Arabic and English; still reply only in Arabic. Keep control identifiers in official Latin form (e.g. ECC 2-3-1, SAMA 3.3.5).`
+    : replyLang === "en"
+      ? `LANGUAGE RULE: Reply ENTIRELY in English. Keep control identifiers in official form (e.g. ECC 2-3-1, SAMA 3.3.5); official Arabic terms may appear in parentheses only where they add precision.`
+      : `LANGUAGE RULE: Reply entirely in the language of the user's LAST message. If Arabic, use formal MSA with correct Saudi regulatory terminology (الهيئة الوطنية للأمن السيبراني, الضوابط الأساسية للأمن السيبراني, البنك المركزي السعودي, إطار الأمن السيبراني), keeping control identifiers in official Latin form (e.g. ECC 2-3-1, SAMA 3.3.5).${userLang === "ar" ? " Interface language is Arabic; prefer Arabic when ambiguous." : ""}`;
   return [
     `You are Burhan (برهان), a senior Saudi GRC advisor covering ${scope}${org ? ` for ${org}` : ""}.`,
-    `LANGUAGE RULE: Reply entirely in the language of the user's LAST message. If Arabic, use formal MSA with correct Saudi regulatory terminology (الهيئة الوطنية للأمن السيبراني, الضوابط الأساسية للأمن السيبراني, البنك المركزي السعودي, إطار الأمن السيبراني), keeping control identifiers in official Latin form (e.g. ECC 2-3-1, SAMA 3.3.5).${userLang === "ar" ? " Interface language is Arabic; prefer Arabic when ambiguous." : ""}`,
+    langRule,
     `STYLE: Regulator-grade precision. Cite control numbers. Name concrete evidence artifacts. Dense, brief, numbered steps. No filler.`,
     posture ? `LIVE ASSESSMENT CONTEXT:\n${posture}` : "",
   ].filter(Boolean).join("\n\n");
