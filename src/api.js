@@ -19,6 +19,43 @@ async function req(method, url, body) {
   return data || {};
 }
 
+// Streaming POST: yields raw text chunks via onChunk(chunk, accumulated) and
+// resolves with the full text. JSON responses (errors, non-streaming fallback)
+// are handled transparently.
+async function streamReq(url, body, onChunk) {
+  const res = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const ct = res.headers.get("content-type") || "";
+  if (!res.ok || ct.includes("application/json")) {
+    let data = null;
+    try { data = await res.json(); } catch { /* empty */ }
+    if (!res.ok) {
+      const err = new Error((data && data.error) || `Request failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    const full = (data && data.reply) || "";
+    if (full && onChunk) onChunk(full, full);
+    return full;
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = dec.decode(value, { stream: true });
+    if (!chunk) continue;
+    full += chunk;
+    if (onChunk) onChunk(chunk, full);
+  }
+  return full;
+}
+
 export const api = {
   // auth (all routed through one function: /api/auth?action=...)
   status: () => req("GET", "/api/auth?action=status"),
@@ -59,6 +96,8 @@ export const api = {
   advisorHistory: (cid) => req("GET", `/api/advisor?cid=${encodeURIComponent(cid)}`),
   advisorSend: (cid, content, ground, lang) => req("POST", "/api/advisor", { cid, content, ground, lang }),
   advisorRegen: (cid, ground, lang) => req("POST", "/api/advisor", { cid, regenerate: true, ground, lang }),
+  advisorSendStream: (cid, content, ground, lang, onChunk) => streamReq("/api/advisor", { cid, content, ground, lang, stream: true }, onChunk),
+  advisorRegenStream: (cid, ground, lang, onChunk) => streamReq("/api/advisor", { cid, regenerate: true, ground, lang, stream: true }, onChunk),
   advisorClear: (cid) => req("DELETE", "/api/advisor", { cid }),
   // corrective actions (POA&M)
   listActions: () => req("GET", "/api/actions"),

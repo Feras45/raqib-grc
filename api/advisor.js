@@ -7,14 +7,17 @@
 //   DELETE { cid }           : clear the conversation
 // System prompt + posture built server-side. Single model call per request.
 import { route, readJson, send, requirePerm, httpError } from "./_lib/http.js";
-import { callClaude, advisorSystem } from "./_lib/anthropic.js";
+import { callClaude, streamClaude, advisorSystem } from "./_lib/anthropic.js";
 import { loadContext } from "./_lib/context.js";
 import {
   getAssessments, listAdvisorMessages, insertAdvisorTurn, insertAdvisorAssistant,
   deleteTrailingAssistant, deleteAdvisorConversation,
 } from "./_lib/db.js";
 import { buildPostureSummary } from "./_lib/grc.js";
-import { buildAdvisorContext, turnsFromRows, OUTPUT_BUDGET_TOKENS } from "./_lib/advisor-context.js";
+import { buildAdvisorContext, turnsFromRows, detectReplyLang, OUTPUT_BUDGET_TOKENS } from "./_lib/advisor-context.js";
+
+// Vercel Node functions buffer responses unless streaming is opted into.
+export const config = { supportsResponseStreaming: true };
 
 const SOFT_DEADLINE_MS = 45000; // well under Pro's 60s function limit
 const ADVISOR_MODEL = "claude-sonnet-4-6"; // Pro plan: 60s limit affords Sonnet's richer reasoning
@@ -55,8 +58,10 @@ export default route({
       const clean = messages.slice(-12)
         .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
         .map((m) => ({ role: m.role, content: m.content.slice(0, 8000) }));
+      const lastUser = [...clean].reverse().find((m) => m.role === "user");
+      const replyLang = detectReplyLang(lastUser?.content);
       const reply = await withDeadline(
-        callClaude({ model: ADVISOR_MODEL, maxTokens: OUTPUT_BUDGET_TOKENS, system: advisorSystem({ org: ctx.org, selected: ctx.selected, versions: ctx.versions, userLang: lang, posture }), messages: clean }),
+        callClaude({ model: ADVISOR_MODEL, maxTokens: OUTPUT_BUDGET_TOKENS, system: advisorSystem({ org: ctx.org, selected: ctx.selected, versions: ctx.versions, userLang: lang, posture, replyLang }), messages: clean }),
         SOFT_DEADLINE_MS,
       );
       return send(res, 200, { reply });
@@ -81,18 +86,59 @@ export default route({
     const { messages: history, evidenceBlock } = buildAdvisorContext(turns);
     if (!history.length) throw httpError(400, "Nothing to answer — send a message first");
 
+    // Reply language is decided by the question being answered: any Arabic
+    // (including mixed Arabic/English) → Arabic; pure English → English.
+    const lastUser = [...history].reverse().find((m) => m.role === "user");
+    const replyLang = detectReplyLang(regenerate ? lastUser?.content : text);
+
     const system = [
-      advisorSystem({ org: ctx.org, selected: ctx.selected, versions: ctx.versions, userLang: lang, posture }),
+      advisorSystem({ org: ctx.org, selected: ctx.selected, versions: ctx.versions, userLang: lang, posture, replyLang }),
       evidenceBlock,
     ].filter(Boolean).join("\n\n");
+
+    const persist = async (reply) => {
+      if (!reply) return;
+      if (regenerate) await insertAdvisorAssistant(cid, user.id, reply);
+      else await insertAdvisorTurn(cid, user.id, text, reply);
+    };
+
+    /* Streaming mode: raw text chunks as they arrive from the model. Headers
+       go out on the FIRST chunk, so failures before any text still surface as
+       normal JSON errors via the route wrapper. */
+    if (body.stream) {
+      let started = false;
+      let full = ""; // tracked via onText so a mid-stream failure still persists what was sent
+      try {
+        await withDeadline(
+          streamClaude({
+            model: ADVISOR_MODEL, maxTokens: OUTPUT_BUDGET_TOKENS, system, messages: history,
+            onText: (chunk, acc) => {
+              if (!started) {
+                started = true;
+                res.status(200);
+                res.setHeader("content-type", "text/plain; charset=utf-8");
+                res.setHeader("cache-control", "no-cache");
+              }
+              full = acc;
+              res.write(chunk);
+            },
+          }),
+          SOFT_DEADLINE_MS,
+        );
+      } catch (e) {
+        if (!started) throw e;            // clean JSON error, nothing streamed yet
+        console.error("advisor stream interrupted:", e.message);
+      }
+      await persist(full);
+      if (started) { res.end(); return; }
+      return send(res, 200, { reply: full });
+    }
 
     const reply = await withDeadline(
       callClaude({ model: ADVISOR_MODEL, maxTokens: OUTPUT_BUDGET_TOKENS, system, messages: history }),
       SOFT_DEADLINE_MS,
     );
-
-    if (regenerate) await insertAdvisorAssistant(cid, user.id, reply);
-    else await insertAdvisorTurn(cid, user.id, text, reply);
+    await persist(reply);
     send(res, 200, { reply });
   },
 

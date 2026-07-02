@@ -96,7 +96,7 @@ const STR = {
       "90-day remediation plan for my top gaps",
     ],
     inputPh: "Write in English or Arabic, or attach evidence…",
-    thinking: "Drafting guidance…",
+    thinking: "Advisor is thinking…",
     analyzing: "Analyzing evidence…",
     clearThread: "Clear thread",
     ground: "Ground in my assessment data",
@@ -307,7 +307,7 @@ const STR = {
       "Map ECC 2-9 to SAMA CSF equivalents",
     ],
     inputPh: "اكتب بالعربية أو الإنجليزية، أو أرفق دليلًا…",
-    thinking: "جارٍ إعداد الإرشادات…",
+    thinking: "المستشار يفكّر…",
     analyzing: "جارٍ تحليل الدليل…",
     clearThread: "مسح المحادثة",
     ground: "الاستناد إلى بيانات التقييم",
@@ -1580,16 +1580,41 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
 
   // The server rebuilds context from the stored conversation (turns + evidence
   // refs) — only the new message travels; history is never re-sent from here.
+  // The reply STREAMS: real model chunks land in the bubble as they arrive;
+  // until the first chunk a plain "thinking" state shows (no fake typing).
   const run = async (text, { regenerate: regen = false } = {}) => {
     setBusy(true);
+    let started = false;
+    const onChunk = (_chunk, acc) => {
+      if (!started) {
+        started = true;
+        setMsgs((p) => [...p, { role: "assistant", content: acc, streaming: true, t: Date.now() }]);
+      } else {
+        setMsgs((p) => {
+          const n = p.slice();
+          const last = n[n.length - 1];
+          if (last && last.streaming) n[n.length - 1] = { ...last, content: acc };
+          return n;
+        });
+      }
+    };
     try {
-      const { reply } = regen
-        ? await api.advisorRegen(cid, ground, lang)
-        : await api.advisorSend(cid, text, ground, lang);
-      setMsgs((p) => [...p, { role: "assistant", content: reply, t: Date.now() }]);
+      const full = regen
+        ? await api.advisorRegenStream(cid, ground, lang, onChunk)
+        : await api.advisorSendStream(cid, text, ground, lang, onChunk);
+      setMsgs((p) => {
+        const n = p.slice();
+        const last = n[n.length - 1];
+        if (last && last.streaming) n[n.length - 1] = { role: "assistant", content: full, t: Date.now() };
+        else n.push({ role: "assistant", content: full, t: Date.now() });
+        return n;
+      });
     } catch (e) {
       toast(e.message || tt(lang, "advFail"), "error");
-      setMsgs((p) => [...p, { role: "assistant", content: e.message || tt(lang, "advFail"), error: true, t: Date.now() }]);
+      setMsgs((p) => [
+        ...p.map((m) => (m.streaming ? { role: "assistant", content: m.content, t: m.t } : m)), // keep any partial text
+        { role: "assistant", content: e.message || tt(lang, "advFail"), error: true, t: Date.now() },
+      ]);
     } finally { setBusy(false); }
   };
 
@@ -1725,7 +1750,7 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
                   </button>
                 )}
               </div>
-              {!mine && !m.error && !m.ev && (
+              {!mine && !m.error && !m.ev && !m.streaming && (
                 <MsgActions lang={lang} copied={copiedIdx === i}
                   onCopy={() => copyMsg(m.content, i)}
                   onRegen={isLastAssistant ? () => regenerate(i) : null} />
@@ -1739,7 +1764,7 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
           );
         })}
 
-        {(busy || analyzing) && (
+        {(analyzing || (busy && !msgs[msgs.length - 1]?.streaming)) && (
           <div className="flex items-center gap-2" style={{ color: T.inkFaint, fontSize: 13 }}>
             <Loader2 size={15} className="raqib-spin" /> {analyzing ? tt(lang, "analyzing") : tt(lang, "thinking")}
           </div>
@@ -3901,12 +3926,12 @@ function DiagnosticsPanel({ lang, catalogs, settings }) {
 
 const NAV = [
   { id: "dash", Icon: LayoutDashboard },
+  { id: "advisor", Icon: Sparkles },
   { id: "controls", Icon: ListChecks },
   { id: "risk", Icon: Flame },
   { id: "evidence", Icon: FileCheck2 },
   { id: "actions", Icon: ListTodo }, // POA&M — every role; viewer is read-only
   { id: "approvals", Icon: ClipboardCheck, need: "approve" },
-  { id: "advisor", Icon: Sparkles },
   { id: "users", Icon: UsersIcon, need: "manageUsers" },
   { id: "settings", Icon: Settings2 },
 ];

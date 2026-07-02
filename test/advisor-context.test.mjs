@@ -1,5 +1,5 @@
 // Run: node test/advisor-context.test.mjs  (dependency-free)
-import { buildAdvisorContext, turnsFromRows, estimateTokens, INPUT_BUDGET_TOKENS } from "../api/_lib/advisor-context.js";
+import { buildAdvisorContext, turnsFromRows, estimateTokens, detectReplyLang, INPUT_BUDGET_TOKENS } from "../api/_lib/advisor-context.js";
 
 let pass = 0, fail = 0; const fails = [];
 const t = (n, fn) => { try { if (fn() === false) throw new Error("returned false"); pass++; } catch (e) { fail++; fails.push(`${n}: ${e.message}`); } };
@@ -87,6 +87,12 @@ t("turnsFromRows maps DB rows (join shape) to builder turns", () => {
   eq(turns[1].evidence.controls, ["ncaecc:1-1-1"]);
   eq(turns[2], { role: "assistant", content: "hello" });
 });
+
+t("reply language: English question → en", () => detectReplyLang("What evidence does ECC 2-9-1 need?") === "en");
+t("reply language: Arabic question → ar", () => detectReplyLang("ما الأدلة المطلوبة للضابط؟") === "ar");
+t("reply language: MIXED Arabic+English → ar", () => detectReplyLang("explain الضوابط for backup please") === "ar");
+t("reply language: Arabic with Latin control ids → ar", () => detectReplyLang("اشرح ECC 2-3-1") === "ar");
+t("reply language: empty/ids-only → en", () => detectReplyLang("") === "en" && detectReplyLang("2-3-1?") === "en");
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fails.length) { for (const f of fails) console.error(" ✗ " + f); process.exit(1); }

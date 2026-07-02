@@ -15,6 +15,10 @@ export const EVIDENCE_SUMMARY_CHARS = 400;
 // ~4 chars/token is a safe overestimate for mixed English/Arabic GRC text.
 export const estimateTokens = (s) => Math.ceil(String(s || "").length / 4);
 
+/* Reply-language rule: any Arabic in the question → answer in Arabic (this
+   covers mixed Arabic/English questions); pure English → English. */
+export const detectReplyLang = (text) => (/[؀-ۿ]/.test(String(text || "")) ? "ar" : "en");
+
 /*
  * turns: chronological rows [{ role: 'user'|'assistant'|'evidence', content,
  *   evidence?: { name, docType, summary, controls } }]
