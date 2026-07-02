@@ -212,6 +212,8 @@ const STR = {
     ctrlNoMap: "No mapping for this code in the loaded catalogs.",
     /* evidence: external upload links */
     genLink: "Generate upload link",
+    linkReqName: "Evidence title (shown to the uploader)",
+    linkReqHint: "Creates an evidence-request entry in the registry. Anyone with the link can upload files to it — no account needed. Copy the link and send it yourself.",
     linkExpiry: "Expiry (days)",
     linkUses: "Max uses",
     linkOnce: "This link is shown once — copy it now. Only a hash is kept on the server.",
@@ -421,6 +423,8 @@ const STR = {
     ctrlNoMap: "لا يوجد ضابط مطابق لهذا الرمز في الكتالوجات المحمّلة.",
     /* الأدلة: روابط الرفع الخارجية */
     genLink: "إنشاء رابط رفع",
+    linkReqName: "عنوان الدليل (يظهر لمن يرفع)",
+    linkReqHint: "يُنشئ طلب دليل في السجل. يمكن لأي شخص لديه الرابط رفع الملفات إليه دون حساب. انسخ الرابط وأرسله بنفسك.",
     linkExpiry: "الصلاحية (أيام)",
     linkUses: "الحد الأقصى للاستخدام",
     linkOnce: "يُعرض هذا الرابط مرة واحدة — انسخه الآن. يُخزَّن على الخادم كتجزئة فقط.",
@@ -1536,6 +1540,7 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
   const fileRef = useRef(null);
   const loadedCidRef = useRef(null);
   const allowEv = can(user.role, "evidence");
+  const [reqLink, setReqLink] = useState(false); // "request evidence" upload-link modal
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy, analyzing]);
 
@@ -1647,6 +1652,13 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
           <h1 style={{ fontSize: 24, fontWeight: 700, color: T.ink, marginTop: 4 }}>{tt(lang, "advTitle")}</h1>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {can(user.role, "shareEvidence") && (
+            <button onClick={() => setReqLink(true)}
+              className="rounded-full px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 raqib-focus"
+              style={{ background: "rgba(22,143,91,0.1)", border: `1px solid ${T.emerald}`, color: T.emerald }}>
+              <Upload size={11} /> {tt(lang, "genLink")}
+            </button>
+          )}
           <button onClick={() => setGround((g) => !g)} title={tt(lang, "groundTip")}
             className="rounded-full px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 raqib-focus"
             style={{
@@ -1763,6 +1775,10 @@ function AdvisorView({ msgs, setMsgs, pendingControl, clearPending, org, selecte
           </button>
         </div>
       </div>
+
+      {reqLink && (
+        <RequestUploadLinkModal lang={lang} toast={toast} onClose={() => setReqLink(false)} onCreated={onEvidence} />
+      )}
     </div>
   );
 }
@@ -2508,6 +2524,96 @@ function ControlPopover({ keyStr, row, versions, lang, onClose }) {
   );
 }
 
+/* Standalone "request evidence" flow: generate an upload link BEFORE any
+   evidence exists. Creates a placeholder registry item (docType "request")
+   that external uploads attach to. Available from the Evidence Registry and
+   the Advisor headers (Admin/Manager/Assessor; server-enforced). */
+function RequestUploadLinkModal({ lang, toast, onCreated, onClose }) {
+  const [title, setTitle] = useState("");
+  const [expiresDays, setExpiresDays] = useState(7);
+  const [maxUses, setMaxUses] = useState(1);
+  const [fresh, setFresh] = useState(null); // one-time link
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [err, setErr] = useState("");
+
+  const gen = async () => {
+    setErr("");
+    if (!title.trim()) return setErr(tt(lang, "linkReqName"));
+    setBusy(true);
+    try {
+      const { link, evidence: ev } = await api.createUploadLink({ title: title.trim(), expiresDays, maxUses });
+      setFresh({ url: `${window.location.origin}/u/${link.token}`, expiresAt: link.expiresAt, maxUses: link.maxUses });
+      if (ev && onCreated) onCreated(ev);
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(fresh.url); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch {}
+  };
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 95, background: "rgba(20,28,24,0.35)" }} onClick={onClose}>
+      <Card className="p-5 raqib-drawer w-full space-y-3" style={{ maxWidth: 480, background: "#FFFFFF" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{tt(lang, "genLink")}</div>
+          <button onClick={onClose} className="rounded-md p-1.5 raqib-focus" style={{ background: "rgba(0,0,0,0.05)" }}><X size={15} color={T.inkSoft} /></button>
+        </div>
+
+        {!fresh ? (
+          <>
+            <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.6 }}>{tt(lang, "linkReqHint")}</div>
+            <div>
+              <FieldLbl>{tt(lang, "linkReqName")}</FieldLbl>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} dir="auto" autoFocus
+                placeholder={lang === "ar" ? "مثال: سياسة النسخ الاحتياطي — المورّد س" : "e.g. Backup policy — Vendor X"}
+                style={inputStyle} className="raqib-focus" onKeyDown={(e) => e.key === "Enter" && gen()} />
+            </div>
+            <div className="flex items-end gap-3 flex-wrap">
+              <div>
+                <FieldLbl>{tt(lang, "linkExpiry")}</FieldLbl>
+                <input type="number" min={1} max={30} value={expiresDays} onChange={(e) => setExpiresDays(e.target.value)}
+                  dir="ltr" style={{ ...inputStyle, width: 90 }} className="raqib-focus" />
+              </div>
+              <div>
+                <FieldLbl>{tt(lang, "linkUses")}</FieldLbl>
+                <input type="number" min={1} max={100} value={maxUses} onChange={(e) => setMaxUses(e.target.value)}
+                  dir="ltr" style={{ ...inputStyle, width: 90 }} className="raqib-focus" />
+              </div>
+            </div>
+            {err && <div style={{ color: T.red, fontSize: 12.5 }}>{err}</div>}
+            <button onClick={gen} disabled={busy} className="w-full rounded-lg py-2.5 font-semibold inline-flex items-center justify-center gap-2 raqib-focus"
+              style={{ background: T.emerald, color: "#FFFFFF", fontSize: 14, opacity: busy ? 0.6 : 1 }}>
+              {busy ? <Loader2 size={15} className="raqib-spin" /> : <Upload size={15} />} {tt(lang, "genLink")}
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="rounded-lg p-3 space-y-2" style={{ background: "rgba(22,143,91,0.07)", border: `1px solid ${T.emerald}` }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.emerald }}>{tt(lang, "linkOnce")}</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Mono style={{ fontSize: 11.5, color: T.ink, wordBreak: "break-all", flex: 1, minWidth: 200, background: "#FFFFFF", borderRadius: 6, padding: "6px 8px", border: `1px solid ${T.line}` }} dir="ltr">
+                  {fresh.url}
+                </Mono>
+                <button onClick={copy} className="rounded-lg px-3 py-2 text-xs font-bold inline-flex items-center gap-1.5 raqib-focus"
+                  style={{ background: T.emerald, color: "#FFFFFF" }}>
+                  {copied ? <CheckCheck size={12} /> : <Copy size={12} />} {copied ? tt(lang, "copied") : tt(lang, "copyLink")}
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: T.inkSoft }}>
+                {tt(lang, "dueLbl")}: <span dir="ltr">{new Date(fresh.expiresAt).toLocaleDateString(lang === "ar" ? "ar-SA" : undefined)}</span> · {tt(lang, "linkUses")}: {fresh.maxUses}
+              </div>
+            </div>
+            <button onClick={onClose} className="w-full rounded-lg py-2.5 font-semibold raqib-focus"
+              style={{ background: T.line, color: T.inkSoft, fontSize: 14 }}>
+              {lang === "ar" ? "تم" : "Done"}
+            </button>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 /* Item 6: per-item external upload links (Admin/Manager/Assessor; the server
    enforces the same perm on every endpoint). The raw link is shown ONCE. */
 function UploadLinksPanel({ evidenceId, lang, toast }) {
@@ -2528,7 +2634,7 @@ function UploadLinksPanel({ evidenceId, lang, toast }) {
     if (busy) return;
     setBusy(true);
     try {
-      const { link } = await api.createUploadLink(evidenceId, expiresDays, maxUses);
+      const { link } = await api.createUploadLink({ evidenceId, expiresDays, maxUses });
       setFresh({ url: `${window.location.origin}/u/${link.token}`, expiresAt: link.expiresAt, maxUses: link.maxUses });
       setCopied(false);
       await load();
@@ -2614,6 +2720,7 @@ function EvidenceView({ evidence, setEvidence, lang, user, allRowsByKey, goAdvis
   const canShare = can(user.role, "shareEvidence");
   const [ctrlPop, setCtrlPop] = useState(null); // clicked control key
   const [linksFor, setLinksFor] = useState(null); // evidence id with links panel open
+  const [reqLink, setReqLink] = useState(false); // standalone "request evidence" modal
 
   const remove = async (id) => {
     try {
@@ -2624,10 +2731,19 @@ function EvidenceView({ evidence, setEvidence, lang, user, allRowsByKey, goAdvis
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="raqib-rise">
-        <Eyebrow ar="سجل الأدلة" en="Evidence registry" lang={lang} />
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: T.ink, marginTop: 4 }}>{tt(lang, "evidenceTitle")}</h1>
-        <div style={{ fontSize: 12.5, color: T.inkFaint }}>{tt(lang, "notRetained")}</div>
+      <div className="flex items-end justify-between flex-wrap gap-3 raqib-rise">
+        <div>
+          <Eyebrow ar="سجل الأدلة" en="Evidence registry" lang={lang} />
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: T.ink, marginTop: 4 }}>{tt(lang, "evidenceTitle")}</h1>
+          <div style={{ fontSize: 12.5, color: T.inkFaint }}>{tt(lang, "notRetained")}</div>
+        </div>
+        {canShare && (
+          <button onClick={() => setReqLink(true)}
+            className="rounded-lg px-4 py-2 text-sm font-semibold inline-flex items-center gap-2 raqib-focus"
+            style={{ background: T.emerald, color: "#FFFFFF" }}>
+            <Upload size={14} /> {tt(lang, "genLink")}
+          </button>
+        )}
       </div>
 
       {list.length === 0 ? (
@@ -2706,6 +2822,10 @@ function EvidenceView({ evidence, setEvidence, lang, user, allRowsByKey, goAdvis
       {ctrlPop && (
         <ControlPopover keyStr={ctrlPop} row={allRowsByKey.get(ctrlPop) || null}
           versions={versions} lang={lang} onClose={() => setCtrlPop(null)} />
+      )}
+      {reqLink && (
+        <RequestUploadLinkModal lang={lang} toast={toast} onClose={() => setReqLink(false)}
+          onCreated={(ev) => setEvidence((p) => ({ ...p, [ev.id]: ev }))} />
       )}
     </div>
   );

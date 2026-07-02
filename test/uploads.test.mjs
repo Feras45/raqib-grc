@@ -2,7 +2,8 @@
 // Item 6: token hashing, lifecycle, scope guard, file validation, RBAC, rate limit.
 import {
   newUploadToken, hashUploadToken, normalizeLinkOptions, tokenState, resolveUploadTarget,
-  validateUploadFiles, makeRateLimiter, fileExt, UPLOAD_ALLOWED_EXT, UPLOAD_MAX_BYTES, UPLOAD_MAX_FILES,
+  validateUploadFiles, makeRateLimiter, fileExt, makeRequestEvidence,
+  UPLOAD_ALLOWED_EXT, UPLOAD_MAX_BYTES, UPLOAD_MAX_FILES,
 } from "../api/_lib/uploads.js";
 import { can } from "../api/_lib/grc.js";
 
@@ -93,6 +94,23 @@ t("allow-list matches the spec set", () => {
   for (const e of ["pdf", "png", "jpg", "zip", "csv", "log"]) if (!UPLOAD_ALLOWED_EXT.includes(e)) throw new Error(`missing ${e}`);
 });
 t("fileExt is case-insensitive and suffix-only", () => fileExt("A.b.PDF") === "pdf" && fileExt("noext") === "");
+
+/* ── evidence-request placeholder (link before any evidence exists) ── */
+t("request placeholder: valid title → registry-shaped item", () => {
+  const ev = makeRequestEvidence("  Backup policy — Vendor X  ", "Manager M");
+  if (!ev) throw new Error("null");
+  if (ev.name !== "Backup policy — Vendor X") throw new Error("title not trimmed");
+  if (ev.docType !== "request" || ev.fileType !== "request") throw new Error("wrong type");
+  if (ev.quality !== null || ev.size !== 0) throw new Error("placeholder fields");
+  if (!Array.isArray(ev.controls) || ev.controls.length) throw new Error("controls must start empty");
+  if (!ev.id.startsWith("ev_req_")) throw new Error("id prefix");
+  if (makeRequestEvidence("a", "x").id === makeRequestEvidence("a", "x").id) throw new Error("ids must be unique");
+});
+t("request placeholder: empty/whitespace title → null; long title clipped", () => {
+  if (makeRequestEvidence("", "x") !== null) throw new Error("empty");
+  if (makeRequestEvidence("   ", "x") !== null) throw new Error("whitespace");
+  if (makeRequestEvidence("t".repeat(500), "x").name.length !== 120) throw new Error("not clipped");
+});
 
 /* ── authorization: generate/revoke = Admin/Manager/Assessor; Viewer denied ── */
 t("shareEvidence: admin allowed", () => can("admin", "shareEvidence") === true);

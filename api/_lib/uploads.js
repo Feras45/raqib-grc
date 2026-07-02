@@ -63,6 +63,21 @@ export function validateUploadFiles(files) {
   return { ok: true };
 }
 
+/* ── evidence request placeholder ──────────────────────────────────────────
+   A link can be generated BEFORE any evidence exists: it binds to a
+   placeholder registry item (docType "request") that external uploads then
+   attach to — the one-token-one-item scope guarantee is unchanged. */
+export function makeRequestEvidence(title, byName) {
+  const name = String(title || "").trim().slice(0, 120);
+  if (!name) return null;
+  return {
+    id: `ev_req_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`,
+    name, fileType: "request", docType: "request",
+    summary: "Evidence request — awaiting external upload",
+    quality: null, controls: [], size: 0, by: byName || null,
+  };
+}
+
 /* ── scope: the token row alone decides the target item; request input
       can never redirect an upload to another evidence item ─────────────── */
 export function resolveUploadTarget(tokenRow, requestedEvidenceId) {
